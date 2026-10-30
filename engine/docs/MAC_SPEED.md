@@ -23,6 +23,19 @@ missing, propose the matching option below to the user (numbered, your pick mark
 |---|---|---|
 | `voice` take key (clean voice) | the NVIDIA Studio Voice clients are not in this copy | add the NVIDIA client scripts under `.claude/skills/nvidia/vendor/`, then let `aios take` write `voice` again (`main.rs` Take) |
 | `frame=` take key (reframe a wide take) | a CUDA model | a CPU crop that follows the face, or keep takes vertical |
-| CrisperWhisper (verbatim words with um/uh) | a ~4 GB local model on CUDA | the hosted Parakeet is used (it may drop fillers); `nv.py asr --whisper` (faster-whisper, CPU) is another road |
+| CrisperWhisper (verbatim words with um/uh) | a ~4 GB local model on CUDA | the hosted Parakeet is used (it may drop fillers); a Mac port: the section below |
 | HTML images in a job | needs headless Chromium at a Linux path | set `AIOS_CHROME` to a headless Chromium on the Mac |
 | Songs and sound effects | the library is empty in this copy | the user adds files + `library/songs/songs.json` / `library/sfx/index.json` |
+
+## CrisperWhisper on a Mac (if the user wants it; checked 2026-10-30 on crisperwhisper 2.0.3)
+- The hook: `nv.py asr` runs `models/crisperwhisper/.venv/bin/python models/crisperwhisper/asr.py IN.wav` when that
+  venv exists. asr.py prints JSON `[{"word","start","end"}]` (seconds) on stdout; logs go to stderr. Neither
+  `asr.py` nor `setup.sh` is in this copy: write them here (own venv, never shared).
+- Blocker 1: the `ct2` extra needs `ctranslate2-crisperwhisper`, which ships only Linux x86_64 wheels. On a Mac use
+  `crisperwhisper[transformers]==2.0.3` with `backend="transformers"`.
+- Blocker 2: `transcribe_dual()` raises on any backend but ct2. So: two `transcribe()` calls (mode "verbatim" with
+  `word_timestamps=True`, then mode "intended"); the verbatim words carry the times, the intended pass only gives digits
+  and sentence ends.
+- Device: `device="auto"` picks CUDA or CPU, never `mps`; pass `device="mps"` yourself (untested), with CPU as the
+  fallback. Measure seconds per minute of audio before you propose it as the default.
+- Weights: CrisperWhisper 2.0 large, ~1.5 GB, non-commercial license (internal use only). Hotwords do nothing there.
