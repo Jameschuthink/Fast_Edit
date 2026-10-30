@@ -1,0 +1,3 @@
+# look card_drop: title card word 1 (a test job "hook"): big white script on full black, it drops in from above over 0.3 s; pair it with card_rise below it
+font Script "../fonts/captions/aston_script/Aston Script.ttf"
+style card_drop font=Script size=230 color=#ffffff in=0.3 grow=1 from=up dist=100 fit=820 bg=#000000 y=840

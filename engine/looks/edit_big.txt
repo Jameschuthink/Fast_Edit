@@ -1,0 +1,3 @@
+# look edit_big: the CTA key word: one big white upright Garamond word behind the head, the title look, its bottom fades out (TASTE 59, 64)
+font TitleSerif "../fonts/captions/apple_garamond/AppleGaramond.ttf"
+style edit_big font=TitleSerif size=460 color=#ffffff shadow enter=soft exit=fade fit=1000 fade=0.6 behind

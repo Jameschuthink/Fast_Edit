@@ -1,0 +1,3 @@
+# look title_bold: sign title: Inter Bold, white, soft shadow; hard cut in and out, no move
+font CapInter "../fonts/captions/Inter.ttf"
+style  title_bold font=CapInter weight=700 size=64 color=#ffffff shadow enter=pop exit=fade enterdur=0 exitdur=0

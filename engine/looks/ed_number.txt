@@ -1,0 +1,3 @@
+# look ed_number: editorial bundle - one big serif numeral or stat; blur-pop in, blur out
+font InstrumentSerif "../fonts/looks/InstrumentSerif.ttf"
+style  ed_number font=InstrumentSerif size=360 color=#f2efe8 enter=blurpop exit=blur shadow

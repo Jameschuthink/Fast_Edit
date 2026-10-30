@@ -1,0 +1,3 @@
+# look card_rise: title card word 2 (a test job "stacking"): big white script on full black, it rises in from below over 0.3 s; under card_drop
+font Script "../fonts/captions/aston_script/Aston Script.ttf"
+style card_rise font=Script size=230 color=#ffffff in=0.3 grow=1 from=down dist=90 fit=820 bg=#000000 y=1050

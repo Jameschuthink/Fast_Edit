@@ -1,0 +1,1134 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AIOS3 live</title>
+<!-- aios serve: the live page. A thin client: frames, the draft and small JSON come from the engine (engine/src/serve.rs).
+     Edits go to edit.txt (POST /lineset, /note) and reload by themselves. -->
+<style>
+:root{--bg:#111014;--panel:#1b1a20;--panel2:#16151b;--line:#2c2a33;--ink:#efece6;--mute:#8a8696;--dim:#5f5c6b;--acc:#7c6cff;--note:#f4c64f;--ok:#5fd38d;--warn:#ff6b6b;--main:#5aa9ff}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.4 system-ui,sans-serif;overflow:hidden}
+#app{display:grid;grid-template-rows:auto minmax(0,1fr);height:100vh}
+#main{display:grid;min-height:0;column-gap:14px;grid-template-columns:auto minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;grid-template-areas:"stage side" "bottom bottom"}
+#main.tall{grid-template-areas:"stage side" "stage bottom"}
+#main.still{grid-template-areas:"stage side" "stage side"}#main.still #bottom{display:none}
+header{display:flex;gap:14px;align-items:center;padding:7px 14px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden}
+header b{font-size:15px}.grow{flex:1}
+.hint{color:var(--mute);font-size:12px}.hint b{color:var(--ink)}
+kbd{background:#2a2830;border-radius:4px;padding:0 5px;font:11px ui-monospace,monospace;color:#cfcbd8}
+#stage{grid-area:stage;display:flex;justify-content:center;align-items:flex-start;min-height:0;padding:12px 0 12px 14px}
+#view{position:relative;background:#000;border-radius:10px;overflow:hidden;cursor:crosshair;touch-action:none;user-select:none;flex:none}
+#view img,#view video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block}
+#vid{visibility:hidden}
+#ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#badge{position:absolute;left:8px;top:8px;padding:2px 8px;border-radius:10px;font:600 11px/16px system-ui;background:#000a;color:var(--mute);pointer-events:none}
+#badge.exact{color:var(--ok)}#badge.draft{color:var(--note)}#badge.play{color:#b9b0ff}#badge.held{color:var(--note)}
+#side{grid-area:side;overflow:auto;min-height:0;padding:12px 14px 0 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+h2{font-size:12px;margin:0 0 8px;color:var(--mute);font-weight:600;text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:8px}
+h2 .grow{flex:1}
+button{background:#25232c;color:var(--ink);border:1px solid #37343f;border-radius:7px;padding:5px 10px;font:inherit;cursor:pointer}
+button:hover{border-color:#57536a}button:disabled{opacity:.4;cursor:default}
+button.main{background:var(--acc);border-color:var(--acc)}button.small,select.small{padding:2px 8px;font-size:12px}
+input,select{background:var(--bg);color:var(--ink);border:1px solid #33313b;border-radius:6px;padding:4px 7px;font:inherit;min-width:0}
+input:focus,select:focus{outline:none;border-color:var(--acc)}
+input.bad{border-color:var(--warn)}
+.f{display:grid;grid-template-columns:76px 1fr;gap:5px 8px;align-items:center}
+.f label{color:var(--mute);font-size:12px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.f .pair{display:grid;grid-template-columns:1fr 70px;gap:6px}
+.f .mono,.f input.json{font:12px ui-monospace,monospace}
+.f .sep{grid-column:1/-1;border-top:1px solid var(--line);margin:4px 0}
+.when{font:12px ui-monospace,monospace;color:#cfcbd8}
+#err{white-space:pre-wrap;color:var(--warn);background:#2a1414;border-radius:8px;padding:10px;display:none;font:12px ui-monospace,monospace;margin-bottom:12px}
+#note{flex:1;min-width:160px;padding:7px 10px}
+#note:focus{border-color:var(--note)}
+#at{font:12px ui-monospace,monospace;color:var(--note);white-space:nowrap}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#notes{list-style:none;margin:8px 0 0;padding:0}
+#notes li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:7px 4px;border-top:1px solid var(--line);cursor:pointer}
+#notes li:hover,#notes li.flash{background:#ffffff0c}
+.tag{font:12px ui-monospace,monospace;color:var(--note);white-space:nowrap}.done .tag{color:var(--ok)}.ask .tag{color:var(--warn)}.main .tag{color:var(--main)}
+.st{font-size:11px;color:var(--mute)}.reply{font-size:12px;color:#cfcbd8;margin-top:3px;white-space:pre-wrap}
+.done .txt{color:var(--mute)}
+#bottom{grid-area:bottom;min-width:0;border-top:1px solid var(--line);background:var(--panel)}
+#main.tall #bottom{border-left:1px solid var(--line);border-top-left-radius:10px;overflow:hidden}
+#bar{display:flex;gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden}
+#bar .sep{width:1px;height:20px;background:var(--line);margin:0 2px}
+#play{width:38px}
+#time{font:12px ui-monospace,monospace;color:#cfcbd8;min-width:190px}
+#msg{color:var(--mute);font-size:12px;overflow:hidden;text-overflow:ellipsis}
+#msg.bad{color:var(--warn)}#msg.good{color:var(--ok)}
+#songsw input{width:110px;accent-color:#7c6cff;cursor:ew-resize}#songdb{min-width:44px;font-variant-numeric:tabular-nums;color:var(--text,#ddd)}
+label.sw{display:flex;gap:5px;align-items:center;color:var(--mute);font-size:12px;cursor:pointer}
+#tl{display:block;width:100%;touch-action:none}
+#tip{position:fixed;z-index:9;pointer-events:none;background:#000e;border:1px solid #3a3842;border-radius:6px;padding:4px 8px;font-size:12px;color:var(--ink);white-space:pre;display:none;max-width:460px}
+/* an edit-file job (edit.txt): the file on the right as a tree (setup folder, sentences, their skips and notes) */
+#codecard{background:var(--panel2)}
+#code{font:12px/1.6 ui-monospace,monospace;max-height:calc(100vh - 330px);overflow:auto;margin:0 -4px}
+#code .ln{display:flex;gap:7px;align-items:baseline;padding:1px 6px;border-radius:4px;cursor:pointer;min-width:0}
+#code .ln:hover{background:#ffffff08}#code .ln.on{background:#7c6cff26}
+#code .src{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d9d5e2;font-family:system-ui,sans-serif}
+#code .ln.on .src,#code .note .src{white-space:normal}
+#code .id{color:var(--dim);min-width:24px;flex:none}#code .tm{color:var(--mute);min-width:36px;text-align:right;flex:none}
+#code .kid{padding-left:20px}#code .br{color:var(--dim);flex:none}
+#code .ln.off .src{color:var(--dim);text-decoration:line-through}#code .ln.hist .src{color:var(--dim);font-style:italic}
+
+#code .fold{color:var(--mute);padding:2px 6px;cursor:pointer;user-select:none}#code .fold:hover{color:var(--ink)}
+#code .setup .src{font-family:inherit;color:var(--dim)}
+#code .note .dot{width:7px;height:7px;border-radius:50%;background:var(--note);align-self:center;flex:none}
+#code .note.s-done .dot{background:var(--ok)}#code .note.s-ask .dot{background:var(--warn)}#code .note.s-main .dot{background:var(--main)}#code .note.s-undone{opacity:.6}#code .note.s-undone .dot{background:var(--dim)}
+#code .reply{display:block;color:var(--mute);font-size:11px}
+#code .mini{padding:0 6px;font-size:11px;line-height:16px;border-radius:5px;background:none;color:var(--mute);border-color:var(--line);align-self:center;flex:none}#code .mini:hover{color:var(--ink);border-color:var(--mute)}
+@media (max-width:860px){body{overflow:auto}#app{height:auto}#main,#main.tall,#main.still{grid-template-columns:minmax(0,1fr);grid-template-rows:auto;grid-template-areas:"stage" "side" "bottom"}#stage{padding:12px 14px}#side{padding:0 14px}header .keys{display:none}}
+#libbtn{font-size:16px;line-height:1;padding:3px 8px}
+#lib{position:fixed;left:0;top:41px;bottom:0;width:min(560px,92vw);z-index:50;background:var(--panel);border-right:1px solid var(--line);box-shadow:8px 0 24px #0008;display:none;grid-template-columns:96px minmax(0,1fr)}
+#lib.open{display:grid}#lib .tabs{display:flex;flex-direction:column;gap:4px;padding:10px 8px;border-right:1px solid var(--line)}
+#lib .tabs button{text-align:left}#lib .tabs button.on{border-color:var(--acc);color:#fff}
+#lib .pane{overflow:auto;padding:10px 12px}#lib .pane .hint{margin-bottom:6px}
+#lib .mini{padding:0 6px;font-size:11px;line-height:16px;border-radius:5px;flex:none}
+#lib ul{list-style:none;margin:0;padding:0}#lib li{display:flex;gap:8px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--line)}
+#lib li .nm{color:var(--note);cursor:pointer;white-space:nowrap;font:12px ui-monospace,monospace}#lib li .nm:hover{text-decoration:underline}
+#lib li .wh{flex:1;color:var(--mute);font-size:12px}#lib li .wh b{color:var(--ink);font-weight:500}#libvid{width:100%;border-radius:8px;margin-bottom:8px;display:none;background:#000}
+</style></head><body>
+<div id="app">
+<header><button class="small" id="libbtn" title="library: moves, looks, effects, sounds, songs (L)">☰</button><b id="name">…</b><span class="hint" id="durl"></span><span class="hint" id="dstat">draft: checking…</span><span class="grow"></span>
+  <span class="hint keys"><kbd>Space</kbd> play · <kbd>←</kbd><kbd>→</kbd> frame (<kbd>Shift</kbd> 1 s) · press an element or graphic: move, corners: resize (<kbd>Alt</kbd> no snap) · no render while you drag; one on release · ✎ draw: ink only, Esc: back to move · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Del</kbd> hide · <kbd>N</kbd> note · <kbd>G</kbd> grid · <kbd>Z</kbd> zoom</span></header>
+<section id="main">
+  <div id="stage"><div id="view"><img id="img" alt="" draggable="false"><video id="vid" preload="auto" playsinline muted></video><canvas id="ov"></canvas><div id="badge"></div></div></div>
+  <aside id="side">
+    <div id="err"></div>
+    <div class="card" id="codecard" style="display:none"><h2>edit.txt <span class="grow"></span><button class="small" id="here" title="scroll to the lines at the playhead (Enter)">edits here ⏎</button></h2><div id="code"></div></div>
+    <div class="card" id="insp"></div>
+    <div class="card">
+      <h2>Notes <span class="grow"></span><span class="hint" id="count" style="text-transform:none;letter-spacing:0;font-weight:400"></span></h2>
+      <div class="row"><span id="at"></span><input id="note" placeholder="What to change here? (Shift-drag the ruler: a span)"><button class="small" id="clrdraw" title="clear the drawing (Esc)" style="display:none">✕ drawing</button><button class="main" id="add">Add note</button></div>
+      <div class="hint" id="nhint" style="margin-top:6px">Each note keeps its time and frame. Say <b>check notes</b> in the chat: all new notes are applied as one batch and get a reply here.</div>
+      <ul id="notes"></ul>
+    </div>
+  </aside>
+<section id="bottom">
+  <div id="bar">
+    <button id="play" title="play the draft with sound (Space)">▶</button><span id="time"></span>
+    <span class="sep"></span><button class="small" id="zout" title="zoom out (Ctrl+wheel)">−</button><button class="small" id="zin" title="zoom in (Ctrl+wheel)">+</button><button class="small" id="zfit" title="the whole reel (Z)">fit</button>
+    <span class="sep"></span><button class="small" id="undo" title="undo (Ctrl+Z)">↶ undo</button><button class="small" id="redo" title="redo (Ctrl+Shift+Z)">↷ redo</button>
+    <span class="sep" id="gridsep"></span><label class="sw" id="gridsw" title="the layout grid: safe area (green), app zones (red), columns, thirds (white), golden lines (gold), slots (blue) — key G"><input type="checkbox" id="gridon"> grid</label>
+    <span class="sep" id="dwsep" style="display:none"></span><label class="sw" id="dwsw" style="display:none" title="draw mode: the frame takes ink only — no drag or hover while it is on, so a press can never clash with a drag. Esc leaves it."><input type="checkbox" id="drawon"> ✎ draw</label>
+    <span class="sep" id="songsep" style="display:none"></span><label class="sw" id="songsw" style="display:none" title="song loudness under the voice (the gain= of the song line in edit.txt). Drag; on release the sound re-mixes in ~3 s. Ctrl+Z undoes it."><span>♪ song</span><input type="range" id="songgain" min="-40" max="0" step="1"><span id="songdb"></span></label>
+    <span class="sep"></span><span id="msg"></span>
+  </div>
+  <canvas id="tl"></canvas>
+</section>
+</section>
+</div>
+<div id="lib"><div class="tabs" id="libtabs"></div><div class="pane"><div class="hint">click a name: it goes into the note · ▶ plays it</div><video id="libvid" controls playsinline></video><ul id="liblist"></ul></div></div>
+<div id="tip"></div>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const ROLES = ['caption', 'label', 'body', 'lead', 'h3', 'h2', 'h1', 'display', 'hero', 'big', 'title'];
+const HUE = { text: 258, lines: 258, title: 285, button: 38, play: 38, arrow: 38, numbers: 165, chips: 165, card: 212, compare: 212, strip: 212, sticker: 196, logo: 196, draw: 325 };
+const G = 74;              // the lane names' column (css px)
+const SETTLE = 10;        // ms after the last scrub move: the engine's exact frame replaces the draft's
+let info = null, raw = [], beats = [], words = [], caps = [], ver = 0, dur = 1, fps = 30, t = 0;
+let draftHeld = false, playWhenReady = false;   // a frame drag holds the draft until Play (GET /draft/go)
+let sel = null, playing = false, drafted = -1, draftFresh = false, draftBusy = false, vidReady = false, gridOn = false;
+let notes = [], notesStamp = null, range = null, seekId = null, flashId = null;
+let view = { a: 0, s: 0.05, fit: true }, rows = new Map(), lanes = [], hits = [], drag = null, pending = null, snapLine = null;
+let strokes = [], stroke = null, drawMode = false;   // drawMode: ✎ draw on = the frame takes ink only, over a 100 px grid
+let hand = null, fdrag = null, held = null;   // the frame hand: {id, box, gm, text, fx, keys, line}; fdrag: active drag; held: the released drag, shown until the new frame comes
+let hover = null, hoverBusy = false;   // the id of a draggable under the pointer (a faint outline says: draggable)
+let notePt = null, restTimer = null;   // the note point: { p: world [x, y], by: 'dot' | 'rest', t } (see "the note point")
+let boxes = { key: '', list: null }, settle = 0, exactBusy = false, exactWant = null, frameUrl = null;
+const fmtT = s => (Math.round(s * 100) / 100).toFixed(2) + ' s';
+const clean = w => String(w).trim().replace(/^[^\w'%]+|[^\w'%]+$/g, '');
+const wordAt = s => { let w = null; for (const x of words) { if (x.start <= s + 0.05) w = x; else break; } return w ? clean(w.word) : ''; };
+const lane = id => lanes.find(l => l.id === id);
+const X = s => G + (s - view.a) / view.s;
+const T = x => view.a + (x - G) * view.s;
+// a graphic's name on the timeline: its words, or its pictures' file names (a frame folder: the folder)
+function label(b) {
+  const parts = String(b.text || '').split(' / ').map(p => p.trim());
+  if (!b.text || !parts.every(p => /\.(jpe?g|png|webp|svg|gif|avif|mp4|mov|webm)$/i.test(p))) return b.text || b.type;
+  const names = parts.map(p => { const seg = p.split('/'); return p.includes('%') ? seg[seg.length - 2] || seg.pop() : seg.pop().replace(/\.\w+$/, ''); });
+  return names.length > 2 ? names[0] + ' +' + (names.length - 1) : names.join(' / ');
+}
+const lastT = () => Math.max(0, (Math.round(dur * fps) - 1) / fps);
+const hasEnd = i => !!raw[i] && (raw[i].until !== undefined || raw[i].dur !== undefined);
+const post = async (url, body) => { try { const r = await fetch(url, { method: 'POST', body: JSON.stringify(body || {}) }); return await r.json(); } catch (e) { return { error: String(e) }; } };
+let msgTimer = 0;
+function msg(s, kind) { const m = $('msg'); m.textContent = s; m.className = kind || ''; m.title = s; clearTimeout(msgTimer); msgTimer = setTimeout(() => { m.textContent = ''; }, kind === 'bad' ? 15000 : 8000); }
+
+// ───────────── load ─────────────
+async function load() {
+  const first = !info;
+  info = await (await fetch('/info')).json(); ver = info.version; dur = info.dur; fps = info.fps;
+  raw = Array.isArray(info.raw) ? info.raw : (info.raw && Array.isArray(info.raw.beats) ? info.raw.beats : []);
+  beats = info.beats || []; words = info.words || []; pending = null;
+  caps = info.captions && info.captions.length ? info.captions : words.map(w => ({ s: w.start, e: w.end, lines: [[[clean(w.word), 'BASE']]] }));
+  $('name').textContent = info.name; $('durl').textContent = dur.toFixed(2) + ' s · ' + fps + ' fps · ' + beats.length + ' graphics';
+  $('play').disabled = dur * fps <= 1;
+  const keys = document.querySelector('header .keys'); keys.dataset.all = keys.dataset.all || keys.innerHTML;
+  keys.innerHTML = dur * fps <= 1 ? (info.layout ? '<kbd>G</kbd> grid · ' : '') + '<kbd>N</kbd> note' : keys.dataset.all;
+  $('insp').style.display = raw.length && !info.edit ? '' : 'none';
+  $('gridsw').style.display = $('gridsep').style.display = info.layout ? 'flex' : 'none';
+
+  $('dwsw').style.display = info.edit ? 'flex' : 'none'; $('dwsep').style.display = info.edit ? '' : 'none';
+  $('err').style.display = info.error ? 'block' : 'none'; $('err').textContent = info.error || '';
+  if (sel !== null && !raw[sel]) sel = null;
+  layoutLanes(); fitStage();
+  if (first || view.fit) fitView();
+  if (info.edit) {
+    // the notes live in edit.txt: the timeline's note lane shows them
+    notes = info.edit.lines.filter(l => l.kind === 'note' && !l.off && l.t0 !== null).map(l => ({ id: l.id, t: l.t0, text: l.text, status: l.status === 'undone' ? 'done' : l.status, reply: l.reply }));
+    if (hand) hand.line = lineOf(hand.id);   // the edit may have changed the hand's line
+    fetchBoxes();
+  }
+  renderCode(); renderSong(); renderInspector(); updateTime(); requestDraw();
+  if (!playing) preview();
+}
+async function loadNotes() { try { notes = await (await fetch('/notes')).json(); drawNotesList(); requestDraw(); } catch (e) {} }
+
+// ───────────── viewer: the draft while scrubbing or playing, the engine's exact frame when it settles ─────────────
+function fitStage() {
+  const main = $('main'), v = $('view');
+  const ar = info ? info.world[0] / info.world[1] : 9 / 16, still = !!info && dur * fps <= 1, tall = ar < 1;
+  main.className = still ? 'still' : tall ? 'tall' : '';
+  const narrow = innerWidth <= 860;
+  const H = narrow ? innerHeight * 0.7 : main.clientHeight - (still || tall ? 0 : $('bottom').offsetHeight) - 24;
+  const Wmax = narrow ? main.clientWidth - 28 : main.clientWidth - (tall && !still ? 560 : 340) - 42;
+  let h = Math.max(120, H), w = h * ar; if (w > Wmax) { w = Math.max(80, Wmax); h = w / ar; }
+  v.style.width = Math.round(w) + 'px'; v.style.height = Math.round(h) + 'px';
+  drawOverlay();
+}
+function badge(kind, text) { const b = $('badge'); b.className = kind; b.textContent = text; }
+function showFrame(which) { $('vid').style.visibility = which === 'vid' ? 'visible' : 'hidden'; $('img').style.visibility = which === 'img' ? 'visible' : 'hidden'; }
+// a frame drag's pictures (GET /lift, painted once): the plate = what is drawn before the element, the sprite = the
+// element alone, the top = what is drawn after it (the head over a word behind it, the captions). While dragging, the
+// overlay stacks plate, moved sprite, top: no render until the release. After the release they stay at the new spot
+// until the exact frame of the new version arrives (no jump back).
+const lifts = new Map();   // key "id|t|ver" -> Promise<{plate, sprite, top: {img, box} | null} | null>; the last few, prefetched on hover
+function getLift(id) {
+  const key = id + '|' + t.toFixed(4) + '|' + ver;
+  if (!lifts.has(key)) {
+    if (lifts.size >= 6) lifts.delete(lifts.keys().next().value);
+    const u = `/lift?t=${t.toFixed(4)}&v=${ver}&id=${encodeURIComponent(id)}&part=`;
+    const one = async part => {
+      const r = await fetch(u + part); if (!r.ok) throw new Error(await r.text());
+      if (r.status === 204) return null;   // nothing drawn (no top part)
+      const box = (r.headers.get('X-Box') || '').split(',').map(Number), url = URL.createObjectURL(await r.blob());
+      const img = new Image(); img.src = url; await img.decode(); URL.revokeObjectURL(url);   // decoded: the bitmap stays
+      return { img, box: { x: box[0], y: box[1], w: box[2], h: box[3] } };
+    };
+    lifts.set(key, Promise.all([one('plate'), one('sprite'), one('top')]).then(([plate, sprite, top]) => plate && sprite ? { plate, sprite, top } : null).catch(() => { lifts.delete(key); return null; }));
+  }
+  return lifts.get(key);
+}
+function drawLift(g, k) {   // the plate + the sprite at the drag's place (fdrag live, or held after the release)
+  const d = fdrag || held, l = d && d.lift;
+  if (!l) return;
+  const gm = fdrag ? dragGeom(fdrag) : held.gm;
+  if (!gm.changed) return;   // not moved yet: the real frame is the same picture
+  const s = l.sprite.box, cx = d.box0.x + d.box0.w / 2, cy = d.box0.y + d.box0.h / 2;
+  g.setTransform(k, 0, 0, k, 0, 0);
+  g.drawImage(l.plate.img, 0, 0, info.world[0], info.world[1]);
+  if (gm.k !== 1) g.drawImage(l.sprite.img, cx + (s.x - cx) * gm.k, cy + (s.y - cy) * gm.k, s.w * gm.k, s.h * gm.k);
+  else g.drawImage(l.sprite.img, s.x + gm.dx, s.y + gm.dy, s.w, s.h);
+  if (l.top) g.drawImage(l.top.img, l.top.box.x, l.top.box.y, l.top.box.w, l.top.box.h);   // the head stays over a word behind it
+  g.setTransform(1, 0, 0, 1, 0, 0);
+}
+function startDrag(d, id) {   // fdrag + its lift (instant when prefetched on hover)
+  fdrag = { ...d, id, lift: null };
+  getLift(id).then(l => { const x = fdrag && fdrag.id === id ? fdrag : held && held.id === id ? held : null; if (x && !x.lift) { x.lift = l; drawOverlay(); } });
+  badge('draft', 'drag · no render');
+}
+function preview() {
+  clearTimeout(settle);
+  if (playing) return;
+  if (draftFresh && vidReady) {
+    const v = $('vid'); if (Math.abs(v.currentTime - t) > 1e-3) v.currentTime = t;
+    showFrame('vid'); badge('draft', 'draft'); settle = setTimeout(() => exact(t), SETTLE);
+  } else exact(t);
+}
+async function exact(at) {
+  if (exactBusy) { exactWant = at; return; }
+  exactBusy = true; const t0 = performance.now(), v0 = ver;
+  try {
+    const r = await fetch('/frame?t=' + at.toFixed(4) + '&v=' + ver);
+    if (!r.ok) { badge('', 'no frame'); const e = await r.text(); $('err').style.display = 'block'; $('err').textContent = e; }
+    else {
+      const url = URL.createObjectURL(await r.blob());
+      if (!playing && Math.abs(at - t) < 1e-6 && exactWant === null) {
+        const img = $('img'); img.src = url; if (frameUrl) URL.revokeObjectURL(frameUrl); frameUrl = url;
+        await img.decode().catch(() => {});
+        showFrame('img'); badge('exact', 'exact · ' + Math.round(performance.now() - t0) + ' ms');
+        if (held && v0 > held.verBefore) held = null;   // the frame has the moved element: the real picture replaces the lift
+        if (sel !== null || (info && info.edit)) await fetchBoxes();
+        if (hand) {
+          const cur = boxes.list && boxes.key === t.toFixed(4) + '|' + ver;
+          if (cur) { const nb = boxes.list.find(b => b.id === hand.id); if (nb) hand.box = nb; }
+        }
+        drawOverlay();
+      } else URL.revokeObjectURL(url);
+    }
+  } catch (e) {}
+  exactBusy = false;
+  if (exactWant !== null) { const w = exactWant; exactWant = null; exact(w); }
+}
+function seek(s) {
+  t = Math.max(0, Math.min(lastT(), s));
+  held = null;   // a new time: the lift was painted at the old one
+  if (playing) $('vid').currentTime = t; else preview();   // the picture follows the playhead (play goes on from there)
+  updateTime(); follow(); requestDraw(); hover = null;
+  if (info && info.edit) fetchBoxes();
+  drawOverlay();   // hover's box went with the old time
+}
+function updateTime() {
+  $('time').textContent = t.toFixed(2) + ' / ' + dur.toFixed(2) + ' s · frame ' + Math.round(t * fps);
+  const w = wordAt(t);
+  $('at').textContent = range ? '@ ' + fmtT(range.a) + ' – ' + fmtT(range.b) : '@ ' + fmtT(t) + (w ? ' “' + w + '”' : '');
+  markActive();
+}
+function togglePlay() {
+  const v = $('vid');
+  if (playing) { v.pause(); return; }
+  held = null;   // play shows the real draft
+  if (draftHeld) { draftHeld = false; playWhenReady = true; fetch('/draft/go'); msg('the draft renders the moves; it plays when it is ready'); return; }
+  if (!vidReady) { msg(draftBusy ? 'the draft is rendering: play works when it is done (see the draft line)' : 'no draft yet: it renders by itself 1 s after an edit'); return; }
+  if (t >= lastT() - 1e-3) t = 0;
+  if (notePt && notePt.by === 'dot') notePt = null;   // the dot was on the paused frame
+  v.currentTime = t; v.muted = false; playing = true; showFrame('vid'); drawOverlay(); $('play').textContent = '❚❚';
+  badge('play', draftFresh ? 'playing the draft' : 'playing the last draft (a new one renders)');
+  v.play().catch(() => { playing = false; $('play').textContent = '▶'; });
+  requestAnimationFrame(tick);
+}
+function tick() {
+  if (!playing) return;
+  t = Math.min(lastT(), $('vid').currentTime); updateTime(); follow(true); requestDraw();
+  requestAnimationFrame(tick);
+}
+$('vid').onpause = () => { if (!playing) return; playing = false; $('play').textContent = '▶'; $('vid').muted = true; t = Math.min(lastT(), $('vid').currentTime); updateTime(); preview(); requestDraw(); };
+$('vid').onended = $('vid').onpause;
+$('vid').onloadeddata = () => { vidReady = true; if (playWhenReady && !playing) { playWhenReady = false; togglePlay(); } else if (!playing) preview(); };
+$('vid').onerror = () => { vidReady = false; };
+function draftStatus(v) {
+  draftHeld = !!v.draft_held;
+  $('dstat').textContent = v.draft_held ? 'draft: waits for Play (moved on the frame)' : v.draft_busy ? 'draft: rendering the changes…' : (v.draft_msg || 'draft: up to date');
+  draftFresh = !v.draft_busy && v.drafted === v.version; draftBusy = v.draft_busy;
+  // page open while a draft renders: load the last draft on disk now (play = "the last draft"), not after the render
+  if (v.drafted === drafted || (v.draft_busy && drafted !== -1)) return;
+  drafted = v.drafted;
+  if (dur * fps <= 1) return;
+  const vid = $('vid'), at = playing ? vid.currentTime : t, was = playing;
+  vidReady = false; vid.src = '/draft.mp4?d=' + drafted;
+  vid.onloadedmetadata = () => { vid.currentTime = at; if (was) vid.play().catch(() => {}); };
+}
+
+// the overlay: the grid (G) and the selected graphic's box (from the frame's elements, GET /boxes)
+async function fetchBoxes() {
+  const key = t.toFixed(4) + '|' + ver;
+  if (boxes.key === key && boxes.list) { drawOverlay(); return boxes.list; }
+  try { const l = await (await fetch('/boxes?t=' + t.toFixed(4) + '&v=' + ver)).json(); boxes = { key, list: Array.isArray(l) ? l : [] }; } catch (e) { boxes = { key, list: [] }; }
+  drawOverlay(); return boxes.list;
+}
+const isBeat = (id, i) => id === 'beat ' + i || id.startsWith('beat ' + i + ' ');
+function drawOverlay() {
+  const c = $('ov'), v = $('view'), dpr = devicePixelRatio || 1;
+  const nw = Math.max(1, Math.round(v.clientWidth * dpr)), nh = Math.max(1, Math.round(v.clientHeight * dpr));
+  if (c.width !== nw || c.height !== nh) { c.width = nw; c.height = nh; }
+  const g = c.getContext('2d'); g.clearRect(0, 0, c.width, c.height);
+  $('clrdraw').style.display = strokes.length ? '' : 'none';
+  if (!info) return;
+  const k = c.width / info.world[0];
+  if (info.edit && !playing) drawLift(g, k);   // first: the moved element's picture is the base of the overlay
+  if (gridOn && info.layout) drawGrid(g, k, dpr);
+  if (drawMode) drawDrawGrid(g, k, dpr);
+  if (strokes.length || stroke) {
+    g.setTransform(k, 0, 0, k, 0, 0); g.lineCap = g.lineJoin = 'round';
+    for (const s of [...strokes, stroke].filter(Boolean)) {
+      for (const [w, c] of [[9 * dpr / k, 'rgba(0,0,0,0.5)'], [5 * dpr / k, '#ffd34d']]) {
+        g.lineWidth = w; g.strokeStyle = c; g.beginPath(); s.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke();
+      }
+      inkNum(g, s, [...strokes, stroke].indexOf(s) + 1, dpr / k);
+      if (drawMode && s !== stroke) { const hs = 7 * dpr / k; g.fillStyle = '#ffd34d'; for (const [x, y] of s.slice(0, 4)) g.fillRect(x - hs, y - hs, 2 * hs, 2 * hs); }
+    }
+    g.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  if (hand && info.edit && !playing) drawHand(g, k, dpr);
+  if (notePt && notePt.by === 'dot' && info.edit && !playing) {   // the dot: the spot the next note means
+    const [x, y] = notePt.p.map(q => q * k);
+    g.lineWidth = 5 * dpr; g.strokeStyle = 'rgba(0,0,0,0.5)'; g.beginPath(); g.arc(x, y, 11 * dpr, 0, 2 * Math.PI); g.stroke();
+    g.lineWidth = 3 * dpr; g.strokeStyle = '#ff3b30'; g.stroke();
+  }
+  // the hover hint: a faint box + name says which element a click would pick up (before it is picked)
+  if (hover && info.edit && !playing && !drawMode && !(hand && hand.id === hover)) {
+    const list = boxes.list && boxes.key === t.toFixed(4) + '|' + ver ? boxes.list : null;
+    const b = list && list.find(q => q.id === hover);
+    if (b) {
+      const px = dpr / k, name = hoverName(hover);
+      g.setTransform(k, 0, 0, k, 0, 0); g.setLineDash([]);
+      g.lineWidth = 1.5 * px; g.strokeStyle = 'rgba(255,255,255,0.4)'; g.strokeRect(b.x, b.y, b.w, b.h);
+      g.font = `600 ${10 * px}px system-ui`;
+      const tw = g.measureText(name).width + 8 * px;
+      g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(b.x, b.y - 15 * px, tw, 14 * px);
+      g.textBaseline = 'top'; g.fillStyle = 'rgba(255,255,255,0.9)'; g.fillText(name, b.x + 4 * px, b.y - 13 * px);
+      g.setTransform(1, 0, 0, 1, 0, 0);
+    }
+  }
+  if (sel !== null && !playing && boxes.list && boxes.key === t.toFixed(4) + '|' + ver) {
+    // the selected graphic: a dashed outline a little outside its box, on a dark edge so it shows on any picture
+    g.setTransform(k, 0, 0, k, 0, 0); const px = dpr / k, pad = 5 * px;
+    g.font = `700 ${11 * px}px system-ui`; g.textBaseline = 'top';
+    for (const b of boxes.list) if (isBeat(b.id, sel)) {
+      const x = b.x - pad, y = b.y - pad, w = b.w + 2 * pad, h = b.h + 2 * pad;
+      g.setLineDash([]); g.lineWidth = 4 * px; g.strokeStyle = 'rgba(0,0,0,0.55)'; g.strokeRect(x, y, w, h);
+      g.setLineDash([7 * px, 5 * px]); g.lineWidth = 2 * px; g.strokeStyle = '#ffd34d'; g.strokeRect(x, y, w, h);
+      const tag = String(sel), tw = g.measureText(tag).width + 8 * px;
+      g.fillStyle = '#ffd34d'; g.fillRect(x - px, y - 15 * px, tw, 15 * px); g.fillStyle = '#111'; g.fillText(tag, x + 3 * px, y - 13 * px);
+    }
+  }
+}
+function drawGrid(g, k, dpr) {
+  const L = info.layout, lw = dpr;
+  g.setTransform(k, 0, 0, k, 0, 0);
+  g.fillStyle = 'rgba(80,200,255,0.08)'; for (const q of L.cols) g.fillRect(q.x, L.safe.y, q.w, L.safe.h);
+  g.fillStyle = 'rgba(255,40,40,0.32)'; for (const z of L.zones) g.fillRect(z.x, z.y, z.w, z.h);
+  const line = (x0, y0, x1, y1, col, dash) => { g.strokeStyle = col; g.lineWidth = lw / k; g.setLineDash(dash.map(d => d / k)); g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); };
+  if (L.soft) { g.strokeStyle = 'rgba(255,170,60,0.85)'; g.lineWidth = lw / k; g.setLineDash([5 / k, 5 / k]); g.strokeRect(L.soft.x, L.soft.y, L.soft.w, L.soft.h); }
+  g.setLineDash([]); g.strokeStyle = 'rgba(60,230,120,0.95)'; g.lineWidth = 2 * lw / k; g.strokeRect(L.safe.x, L.safe.y, L.safe.w, L.safe.h);
+  for (const x of [L.lines.x.third1, L.lines.x.third2]) line(x, 0, x, L.H, 'rgba(255,255,255,0.6)', [8, 6]);
+  for (const y of [L.lines.y.third1, L.lines.y.third2]) line(0, y, L.W, y, 'rgba(255,255,255,0.6)', [8, 6]);
+  for (const x of [L.lines.x.phi1, L.lines.x.phi2]) line(x, 0, x, L.H, 'rgba(255,200,60,0.85)', [2, 4]);
+  for (const y of [L.lines.y.phi1, L.lines.y.phi2, L.lines.y.upper, L.lines.y.lower]) line(0, y, L.W, y, 'rgba(255,200,60,0.85)', [2, 4]);
+  g.setLineDash([]); g.font = (11 * dpr / k) + 'px system-ui'; g.textBaseline = 'bottom';
+  for (const [n, s] of Object.entries(L.slots)) {
+    if (!s.shown) continue;
+    const box = s.kind !== 'row' && s.h > 0;
+    if (box) { g.strokeStyle = 'rgba(80,200,255,0.7)'; g.lineWidth = lw / k; g.strokeRect(s.x, s.y, s.w, s.h); }
+    const a = 6 / k; g.strokeStyle = 'rgba(80,200,255,1)'; g.lineWidth = 1.5 * lw / k;
+    g.beginPath(); g.moveTo(s.ax - a, s.ay); g.lineTo(s.ax + a, s.ay); g.moveTo(s.ax, s.ay - a); g.lineTo(s.ax, s.ay + a); g.stroke();
+    g.fillStyle = 'rgba(80,200,255,1)'; g.fillText(n, (box ? s.x : s.ax) + 8 / k, box ? s.y + 14 / k : s.ay - 3 / k);
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0);
+}
+// the drawing grid: 100 px cells, labels every 500 px (the note sheet's grid in world px, so a drawing can be measured)
+function drawDrawGrid(g, k, dpr) {
+  const W = info.world[0], H = info.world[1], lw = dpr / k;
+  g.setTransform(k, 0, 0, k, 0, 0); g.font = (11 * dpr / k) + 'px ui-monospace,monospace'; g.textBaseline = 'top';
+  const lab = (x, y, s) => { g.fillStyle = 'rgba(255,255,255,0.9)'; g.strokeStyle = 'rgba(0,0,0,0.8)'; g.lineWidth = 3 * lw; g.strokeText(s, x, y); g.fillText(s, x, y); };
+  for (let x = 100; x < W; x += 100) {
+    g.strokeStyle = x % 500 ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.38)'; g.lineWidth = (x % 500 ? 1 : 1.5) * lw; g.setLineDash([]);
+    g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke();
+    if (!(x % 500)) lab(x + 4 / k, 4 / k, x);
+  }
+  for (let y = 100; y < H; y += 100) {
+    g.strokeStyle = y % 500 ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.38)'; g.lineWidth = (y % 500 ? 1 : 1.5) * lw; g.setLineDash([]);
+    g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke();
+    if (!(y % 500)) lab(4 / k, y + 4 / k, y);
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0);
+}
+// a click on the frame selects the graphic under it
+$('view').onclick = async e => {
+  if (!info) return;
+  if (playing) { togglePlay(); return; }
+  if (info.edit) return;   // an edit-file job: the frame is for drawing (below)
+  const r = $('view').getBoundingClientRect();
+  const wx = (e.clientX - r.left) / r.width * info.world[0], wy = (e.clientY - r.top) / r.height * info.world[1];
+  const list = await fetchBoxes();
+  const hit = [...list].reverse().find(b => b.id.startsWith('beat ') && wx >= b.x && wx <= b.x + b.w && wy >= b.y && wy <= b.y + b.h);
+  select(hit ? parseInt(hit.id.slice(5), 10) : null, false);
+};
+
+// ───────────── timeline ─────────────
+function sizeCanvas(c) { const dpr = devicePixelRatio || 1; c.width = Math.round(c.clientWidth * dpr); c.height = Math.round(c.clientHeight * dpr); }
+function layoutLanes() {
+  const spec = [['ruler', 20, ''], ['moments', 30, 'moments'], ['notes', 22, 'notes']];
+  let y = 0; lanes = spec.map(([id, h, name]) => { const l = { id, y, h, name }; y += h; return l; });
+  const c = $('tl'); c.style.height = y + 'px'; sizeCanvas(c);
+}
+function fitView() { const w = $('tl').clientWidth - G - 10; view.s = Math.max(dur, 0.5) / Math.max(100, w); view.a = 0; view.fit = true; }
+function clampView() {
+  const w = $('tl').clientWidth - G, vis = w * view.s;
+  view.a = Math.max(-0.05 * vis, Math.min(view.a, Math.max(0, dur - 0.95 * vis)));
+}
+function zoomAt(x, k) {
+  const fitS = Math.max(dur, 0.5) / Math.max(100, $('tl').clientWidth - G - 10), tx = T(x);
+  view.s = Math.min(fitS, Math.max(0.0015, view.s * k));
+  view.fit = view.s >= fitS * 0.999;
+  if (view.fit) fitView(); else { view.a = tx - (x - G) * view.s; clampView(); }
+  requestDraw();
+}
+function follow(page) {
+  const w = $('tl').clientWidth, x = X(t);
+  if (x < G || x > w - 30) { view.a = page ? t - 0.1 * (w - G) * view.s : t - 0.5 * (w - G) * view.s; clampView(); }
+}
+let queued = false;
+function requestDraw() { if (!queued) { queued = true; requestAnimationFrame(() => { queued = false; drawTL(); }); } }
+function rr(g, x, y, w, h, r) { g.beginPath(); g.roundRect(x, y, Math.max(0, w), h, Math.min(r, Math.max(0, w) / 2, h / 2)); }
+function drawTL() {
+  const c = $('tl'), g = c.getContext('2d'), dpr = devicePixelRatio || 1, W = c.clientWidth, H = c.clientHeight;
+  if (!info || !W) return;
+  if (c.width !== Math.round(W * dpr)) sizeCanvas(c);
+  g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+  hits = [];
+  lanes.forEach((l, n) => { if (l.id !== 'ruler') { g.fillStyle = n % 2 ? '#161519' : '#18171d'; g.fillRect(0, l.y, W, l.h); } });
+  g.save(); g.beginPath(); g.rect(G, 0, W - G, H); g.clip();
+  g.fillStyle = '#0d0c10'; if (X(dur) < W) g.fillRect(X(dur), 0, W - X(dur), H);   // past the end
+  const vis0 = T(G), vis1 = T(W);
+  // ruler
+  const R = lane('ruler');
+  const step = [0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60].find(s => s / view.s >= 64) || 60;
+  g.font = '10px ui-monospace,monospace'; g.textBaseline = 'middle';
+  for (let s = Math.max(0, Math.floor(vis0 / step) * step); s <= Math.min(vis1, dur) + 1e-9; s += step) {
+    const x = Math.round(X(s)) + 0.5;
+    g.fillStyle = '#2c2a33'; g.fillRect(x, R.y + 12, 1, H - R.y - 12);
+    g.fillStyle = '#8a8696'; g.fillText(step < 1 ? s.toFixed(1) : Math.round(s) + ' s', x + 3, R.y + 7);
+  }
+  // a span for a note (shift-drag)
+  if (range) { g.fillStyle = 'rgba(244,198,79,0.10)'; g.fillRect(X(range.a), 0, X(range.b) - X(range.a), H); g.fillStyle = 'rgba(244,198,79,0.7)'; g.fillRect(X(range.a), 0, 1, H); g.fillRect(X(range.b), 0, 1, H); }
+  // the moments: one tag each, at its span (a click jumps to its start)
+  const M = lane('moments'); g.font = '600 11px system-ui'; g.textBaseline = 'middle';
+  for (const m of (info.edit ? info.edit.lines : []).filter(l => l.kind === 'moment' && !l.off && !l.mark && typeof l.t0 === 'number')) {
+    const x0 = X(m.t0), x1 = X(m.t1); if (x1 < G || x0 > W) continue;
+    const now = t >= m.t0 && t < m.t1;
+    g.fillStyle = now ? '#3a3552' : '#26242d'; rr(g, x0 + 1, M.y + 3, x1 - x0 - 2, M.h - 6, 4); g.fill();
+    g.save(); g.beginPath(); g.rect(x0 + 2, M.y, x1 - x0 - 4, M.h); g.clip();
+    g.fillStyle = now ? '#ffffff' : '#bdb8cc'; g.fillText(m.id + '  ' + quoted(m.raw).replace(/[~*^|]+/g, ' ').replace(/\s+/g, ' '), x0 + 6, M.y + M.h / 2 + 0.5);
+    g.restore();
+    hits.push({ kind: 'moment', m, x0, x1, y0: M.y, y1: M.y + M.h });
+  }
+  // notes
+  const N = lane('notes'); g.font = '700 9px system-ui'; g.textAlign = 'center';
+  for (const n of notes) {
+    const col = n.status === 'done' ? '#5fd38d' : n.status === 'ask' ? '#ff6b6b' : n.status === 'main' ? '#5aa9ff' : '#f4c64f', x = X(n.t);
+    if (n.t2) { g.fillStyle = col + '55'; g.fillRect(x, N.y + 8, X(n.t2) - x, 6); }
+    g.fillStyle = col; g.beginPath(); g.arc(x, N.y + 11, 7, 0, 7); g.fill(); g.fillStyle = '#111'; g.fillText(n.id, x, N.y + 11.5);
+    hits.push({ kind: 'note', n, x0: x - 8, x1: Math.max(x + 8, n.t2 ? X(n.t2) : 0), y0: N.y, y1: N.y + N.h });
+  }
+  g.textAlign = 'left';
+  // the snap line and the playhead
+  if (snapLine) { const x = Math.round(X(snapLine.t)) + 0.5; g.fillStyle = '#ffd34d'; g.fillRect(x - 0.5, 0, 1.5, H); }
+  const px = Math.round(X(t)) + 0.5;
+  g.fillStyle = '#ffffff'; g.fillRect(px - 0.5, 0, 1.5, H); g.beginPath(); g.moveTo(px - 6, 0); g.lineTo(px + 7, 0); g.lineTo(px + 0.5, 9); g.closePath(); g.fill();
+  g.restore();
+  // lane names over their column
+  g.fillStyle = '#131217'; g.fillRect(0, 0, G, H); g.fillStyle = '#2c2a33'; g.fillRect(G - 1, 0, 1, H);
+  g.font = '600 10px system-ui'; g.fillStyle = '#6d6a7a'; g.textBaseline = 'middle';
+  for (const l of lanes) if (l.name) g.fillText(l.name.toUpperCase(), 9, l.y + Math.min(l.h / 2, 14));
+}
+const laneAt = y => lanes.find(l => y >= l.y && y < l.y + l.h);
+const hitAt = (x, y) => { for (let k = hits.length - 1; k >= 0; k--) { const h = hits[k]; if (x >= h.x0 && x <= h.x1 && y >= h.y0 && y <= h.y1) return h; } return null; };
+const pos = e => { const r = $('tl').getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+const tl = $('tl');
+tl.onpointerdown = e => {
+  if (!info || e.button !== 0) return;
+  const { x, y } = pos(e), l = laneAt(y), h = hitAt(x, y);
+  if (x < G) return;
+  try { tl.setPointerCapture(e.pointerId); } catch (err) {}
+  tip(null);
+  if (h && h.kind === 'moment') { drag = { kind: 'scrub' }; seek(h.m.t0 + 0.5 / fps); return; }
+  if (h && h.kind === 'note') { seek(h.n.t); flashNote(h.n.id); return; }
+  if (e.shiftKey) { drag = { kind: 'range', a: T(x) }; range = { a: T(x), b: T(x) }; updateTime(); requestDraw(); return; }
+  drag = { kind: 'scrub' }; seek(T(x));
+};
+tl.onpointermove = e => {
+  if (!info) return;
+  const { x, y } = pos(e);
+  if (!drag) { hoverTip(x, y, e); return; }
+  if (drag.kind === 'scrub') { seek(T(x)); return; }
+  if (drag.kind === 'range') { range = { a: Math.max(0, Math.min(drag.a, T(x))), b: Math.min(dur, Math.max(drag.a, T(x))) }; updateTime(); requestDraw(); return; }
+};
+tl.onpointerup = e => {
+  const d = drag; drag = null; snapLine = null; tip(null);
+  if (d && d.kind === 'range' && range && range.b - range.a < 0.05) { range = null; updateTime(); }
+  if (d && d.kind === 'range' && range) $('note').focus();
+  requestDraw();
+};
+tl.onpointerleave = () => { if (!drag) tip(null); };
+tl.onwheel = e => {
+  e.preventDefault();
+  const { x } = pos(e);
+  if (e.ctrlKey || e.metaKey) zoomAt(Math.max(G, x), Math.exp(e.deltaY * 0.0022));
+  else { view.a += (e.deltaX + e.deltaY) * view.s; view.fit = false; clampView(); requestDraw(); }
+};
+function hoverTip(x, y, e) {
+  const h = x >= G ? hitAt(x, y) : null;
+  tl.style.cursor = x >= G ? 'pointer' : 'default';
+  if (!h) { tip(null); return; }
+  if (h.kind === 'moment') tip(`${h.m.id} · ${fmtT(h.m.t0)} – ${fmtT(h.m.t1)}\n${quoted(h.m.raw)}\nclick: jump here`, e);
+  else if (h.kind === 'note') tip(`#${h.n.id} ${h.n.status}: ${h.n.text}${h.n.reply ? '\n→ ' + h.n.reply : ''}`, e);
+  else tip(null);
+}
+function tip(s, e) {
+  const el = $('tip'); if (!s) { el.style.display = 'none'; return; }
+  el.textContent = s; el.style.display = 'block';
+  const w = el.offsetWidth; el.style.left = Math.min(innerWidth - w - 8, e.clientX + 14) + 'px'; el.style.top = Math.max(4, e.clientY - el.offsetHeight - 12) + 'px';
+}
+
+// ───────────── edits ─────────────
+async function commitBeat(d) {
+  const b = beats.find(q => q.i === d.i), op = { i: d.i };
+  const ms = x => Math.round(x * 1000) / 1000;
+  if (d.mode !== 'end') { op.t0 = ms(d.cur.t0); if (d.snap0) op.snap0 = d.snap0; }
+  if (d.mode === 'end' || (d.mode === 'move' && d.hasEnd)) { op.t1 = ms(d.cur.t1); if (d.snap1) op.snap1 = d.snap1; }
+  const what = d.mode === 'move' ? 'move' : d.mode === 'start' ? 'trim the start of' : 'trim the end of';
+  op.label = `${what} graphic ${d.i} (${b.type}) to ${fmtT(op.t0 ?? op.t1)}`;
+  pending = { i: d.i, t0: d.cur.t0, t1: op.t1 ?? b.t1 }; requestDraw();
+  const r = await post('/beat', op);
+  if (r.error) { pending = null; msg(r.error, 'bad'); requestDraw(); return; }
+  msg(`${op.label}${r.pinned && r.pinned.length ? ' · kept in place: graphic ' + r.pinned.join(', ') : ''} · Ctrl+Z undoes`, 'good');
+}
+async function editBeat(i, set, label) {
+  const r = await post('/beat', { i, set, label });
+  if (r.error) { msg(r.error, 'bad'); renderInspector(); return false; }
+  msg(label + (r.pinned && r.pinned.length ? ' · kept in place: graphic ' + r.pinned.join(', ') : '') + ' · Ctrl+Z undoes', 'good');
+  return true;
+}
+async function undo() { const r = await post('/undo'); if (!r.error) held = null; msg(r.error ? r.error : 'undone: ' + r.undone, r.error ? 'bad' : 'good'); }
+async function redo() { const r = await post('/redo'); if (!r.error) held = null; msg(r.error ? r.error : 'redone: ' + r.redone, r.error ? 'bad' : 'good'); }
+function select(i, seekInto) {
+  sel = i; renderInspector(); requestDraw();
+  const b = i === null ? null : beats.find(q => q.i === i);
+  if (b && seekInto && !(t >= b.t0 && t <= Math.min(b.t1, dur))) seek(b.t0 + Math.min(0.6, (Math.min(b.t1, dur) - b.t0) / 2));
+  else if (b) fetchBoxes(); else drawOverlay();
+}
+
+// the inspector: the selected graphic's fields; a change is one edit (Enter or leaving the field)
+function fieldHtml(k, v) {
+  const id = 'f_' + k;
+  if (typeof v === 'boolean') return `<label for="${id}">${esc(k)}</label><span><input type="checkbox" id="${id}" data-k="${esc(k)}"${v ? ' checked' : ''}></span>`;
+  if (typeof v === 'number') return `<label for="${id}">${esc(k)}</label><input type="number" step="any" id="${id}" data-k="${esc(k)}" value="${v}">`;
+  if (v !== null && typeof v === 'object') return `<label for="${id}">${esc(k)}</label><input class="json" id="${id}" data-k="${esc(k)}" value="${esc(JSON.stringify(v))}">`;
+  return `<label for="${id}">${esc(k)}</label><input id="${id}" data-k="${esc(k)}" value="${esc(v ?? '')}">`;
+}
+function renderInspector() {
+  const el = $('insp'), hidden = raw.map((b, i) => [i, b]).filter(([, b]) => b && b.off);
+  const hiddenHtml = hidden.length ? `<div class="row" style="margin-top:10px"><span class="hint">hidden:</span>${hidden.map(([i, b]) => `<button class="small" data-show="${i}" title="show it again">${i} · ${esc(b.type)}</button>`).join('')}</div>` : '';
+  if (sel === null || !raw[sel]) {
+    el.innerHTML = `<h2>Graphic</h2><div class="hint">${raw.length ? 'Click a graphic on the timeline or on the frame. Drag it to move it, drag its edges to trim it; it snaps to the spoken words.' : 'This job has no graphics (no beats.json).'}</div>${hiddenHtml}`;
+    return;
+  }
+  const rb = raw[sel], b = beats.find(q => q.i === sel), L = info.layout;
+  const when = b ? `${fmtT(b.t0)} – ${fmtT(Math.min(b.t1, dur))} <span class="hint">(${(Math.min(b.t1, dur) - b.t0).toFixed(2)} s)</span>` : '<span class="hint">hidden</span>';
+  let h = `<h2>Graphic ${sel} · ${esc(rb.type)}<span class="grow"></span>${b ? '<button class="small" id="tostart" title="go to its start">⏮</button>' : ''}<button class="small" id="hide">${rb.off ? 'show' : 'hide'}</button></h2>`;
+  h += `<div class="f"><label>on screen</label><span class="when">${when}</span>`;
+  for (const k of ['at', 'dt', 'until', 'dtUntil']) {
+    const v = rb[k];
+    if (k.startsWith('dt')) h += `<label for="f_${k}">${k}</label><input type="number" step="0.01" id="f_${k}" data-k="${k}" value="${v ?? ''}" placeholder="0 s">`;
+    else h += `<label for="f_${k}">${k}</label><input class="mono" id="f_${k}" data-k="${k}" value="${esc(v === undefined ? '' : typeof v === 'string' ? v : JSON.stringify(v))}" placeholder="${k === 'at' ? 'a spoken word' : 'stays to the end'}">`;
+  }
+  h += '<div class="sep"></div>';
+  if (L) {
+    const slots = Object.keys(L.slots || {}), sv = rb.slot ?? '', zv = rb.size ?? '';
+    h += `<label for="f_slot">slot</label><select id="f_slot" data-k="slot"><option value="">—</option>${slots.map(s => `<option${s === sv ? ' selected' : ''}>${esc(s)}</option>`).join('')}${sv && !slots.includes(sv) ? `<option selected>${esc(sv)}</option>` : ''}</select>`;
+    h += `<label for="f_size">size</label><select id="f_size" data-k="size"><option value="">—</option>${ROLES.map(s => `<option${s === zv ? ' selected' : ''}>${s}</option>`).join('')}${zv !== '' && !ROLES.includes(zv) ? `<option selected value="${esc(zv)}">${esc(zv)}${typeof zv === 'number' ? ' px' : ''}</option>` : ''}</select>`;
+  }
+  const skip = new Set(['type', 'off', 'at', 'dt', 'until', 'dtUntil', ...(L ? ['slot', 'size'] : [])]);
+  for (const [k, v] of Object.entries(rb)) if (!skip.has(k)) h += fieldHtml(k, v);
+  h += '</div>' + hiddenHtml;
+  el.innerHTML = h;
+}
+function parseField(k, orig, str) {
+  if (str === '') return null;                                   // empty: the key goes (the default comes back)
+  if (k === 'dt' || k === 'dtUntil') { const n = parseFloat(str); if (!isFinite(n)) throw new Error('a number of seconds'); return n; }
+  if (typeof orig === 'number') { const n = parseFloat(str); if (!isFinite(n)) throw new Error('a number'); return n; }
+  if (orig !== null && typeof orig === 'object') return JSON.parse(str);
+  if ((k === 'at' || k === 'until') && /^[\[{]/.test(str)) return JSON.parse(str);
+  return str;                                                     // text stays text ("5" is the spoken word 5)
+}
+$('insp').addEventListener('change', async e => {
+  const el = e.target, k = el.dataset.k; if (!k || sel === null) return;
+  let v;
+  try { v = el.type === 'checkbox' ? el.checked : parseField(k, raw[sel][k], el.value.trim()); }
+  catch (err) { el.classList.add('bad'); msg(k + ': ' + err.message, 'bad'); return; }
+  el.classList.remove('bad');
+  await editBeat(sel, { [k]: v }, `graphic ${sel} ${k}: ${v === null ? 'removed' : JSON.stringify(v)}`);
+});
+$('insp').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.target.blur(); });
+$('insp').addEventListener('click', e => {
+  const s = e.target.dataset && e.target.dataset.show;
+  if (s !== undefined) { editBeat(+s, { off: null }, `show graphic ${s}`); select(+s, false); return; }
+  if (e.target.id === 'hide' && sel !== null) toggleHide(sel);
+  if (e.target.id === 'tostart' && sel !== null) { const b = beats.find(q => q.i === sel); if (b) seek(b.t0); }
+});
+function toggleHide(i) { const off = !!(raw[i] && raw[i].off); editBeat(i, { off: off ? null : true }, `${off ? 'show' : 'hide'} graphic ${i}`); }
+
+// ───────────── notes ─────────────
+function drawNotesList() {
+  const fresh = notes.filter(n => n.status === 'new').length, ask = notes.filter(n => n.status === 'ask').length,
+    up = notes.filter(n => n.status === 'main').length;   // routed up by the old notes agent: say "check notes JOB" in the chat
+  $('count').textContent = notes.length ? fresh + ' new' + (ask ? ' · ' + ask + ' question' + (ask > 1 ? 's' : '') : '') + (up ? ' · ' + up + ' for the main chat' : '') + ' · ' + notes.length + ' total' : 'no notes yet';
+  const order = { ask: 0, main: 0, new: 1, done: 2 };
+  $('notes').innerHTML = [...notes].sort((a, b) => (order[a.status] ?? 1) - (order[b.status] ?? 1) || a.t - b.t).map(n =>
+    `<li class="${esc(n.status)}${n.id === flashId ? ' flash' : ''}" data-t="${n.t}"><span class="tag">#${n.id} ${n.t.toFixed(2)}${n.t2 ? '–' + n.t2.toFixed(2) : ''} s</span><div><div class="txt">${esc(n.text)}</div>` +
+    (n.reply ? `<div class="reply">${esc(n.reply)}</div>` : '') + '</div>' +
+    (n.status === 'new' ? `<button class="small" data-del="${n.id}" title="remove">✕</button>` : `<span class="st">${esc(n.status)}</span>`) + '</li>').join('');
+}
+function flashNote(id) { flashId = id; drawNotesList(); setTimeout(() => { flashId = null; drawNotesList(); }, 1500); }
+let answering = null;   // the ask note the note box answers ("answer" button), else null
+const noteHint = $('note').placeholder;
+function endAnswer() { answering = null; $('note').placeholder = noteHint; $('add').textContent = 'Add note'; }
+async function addNote() {
+  let text = $('note').value.trim(); if (!text) return;
+  $('note').value = '';
+  if (answering) { text = `answer to ${answering}: ${text}`; endAnswer(); }   // a new note; the next "check notes" chat reads it with the ask
+  if (info && info.edit) {
+    endStroke();
+    const pt = notePt && (notePt.by === 'rest' || Math.abs(notePt.t - t) < 1e-3) ? notePt : null;   // a dot on this frame only
+    if (pt) { notePt = null; drawOverlay(); }   // the note takes its point at once: a new point can be made while it is in flight
+    const covers = strokes.length ? await coversOf() : [], png = strokes.length ? strokePng() : null;
+    const r = await post('/enote', { t, text, covers, png, pt: pt ? [pt.p[0] / info.world[0], pt.p[1] / info.world[1]] : null, ptby: pt ? pt.by : null });
+    if (r.error && pt && !notePt) { notePt = pt; drawOverlay(); }   // not saved: the point comes back
+    clearDrawing();
+    msg(r.error ? r.error : `note ${r.id}${covers.length ? ' (on ' + covers.join(', ') + ')' : ''} saved. Say check notes in the chat.`, r.error ? 'bad' : 'good');
+    return;
+  }
+  const body = range ? { t: range.a, t2: range.b, word: wordAt(range.a), text } : { t, word: wordAt(t), text };
+  const r = await post('/notes', body); if (Array.isArray(r)) notes = r;
+  range = null; updateTime(); drawNotesList(); requestDraw(); msg('note added: say “check notes” in the chat when you are done', 'good');
+}
+$('notes').onclick = async e => {
+  const del = e.target.dataset.del;
+  if (del) { e.stopPropagation(); const r = await post('/notes/del', { id: +del }); if (Array.isArray(r)) notes = r; drawNotesList(); requestDraw(); return; }
+  const li = e.target.closest('li'); if (li) seek(parseFloat(li.dataset.t));
+};
+$('add').onclick = addNote;
+$('note').onkeydown = e => { if (e.key === 'Enter') addNote(); if (e.key === 'Escape') { if (answering) { endAnswer(); e.target.value = ''; } e.target.blur(); } };
+
+// ───────────── an edit-file job: the file, its toggles, notes with a drawing ─────────────
+// the file as a tree: the setup lines in one folder, one row per sentence, and under it its skips (a skip at the end
+// of a sentence goes to the next one), its notes and graphics; with "history", the old versions
+let setupOpen = false;
+const rawSpan = l => {   // the clip and raw seconds of a line: "say s1 A 0.30-3.30 …" -> {c: 'A', a: 0.3, b: 3.3}
+  const m = /^\S+\s+\S+\s+([A-Z]\w*)\s+(\d+(?:\.\d+)?)(?:-(\d+(?:\.\d+)?))?/.exec(l.raw.replace(/^#\S*\s*/, ''));
+  return m ? { c: m[1], a: +m[2], b: m[3] !== undefined ? +m[3] : +m[2] } : null;
+};
+const quoted = s => { const m = /"((?:[^"\\]|\\.)*)"/.exec(s); return m ? m[1].replace(/\\"/g, '"') : ''; };
+const rowAt = l => `data-n="${l.n}" data-t="${l.t0 ?? ''}" data-t1="${l.t1 ?? ''}"`;
+function noteRow(l, kid) {
+  const st = l.status || 'new', sp = rawSpan(l);
+  const act = st === 'done' ? `<button class="mini" data-undo="${esc(l.id)}" title="undo this note">undo</button>`
+    : st === 'undone' && l.changed ? `<button class="mini" data-redo="${esc(l.id)}" title="redo this note">redo</button>`
+    : st === 'ask' ? `<button class="mini" data-ans="${esc(l.id)}" title="answer the question (a number or your words): a new note for the next check notes">answer</button>` : '';
+  return `<div class="ln note s-${esc(st)}${kid ? ' kid' : ''}" data-n="${l.n}" data-id="${esc(l.id)}" data-t="${l.t0 ?? ''}">${kid ? '<span class="br">└</span>' : ''}<span class="dot"></span>` +
+    `<span class="id">${esc(l.id)}</span><span class="tm">${sp ? sp.a.toFixed(2) : ''}</span>` +
+    `<span class="src">“${esc(l.text)}” <span class="st">· ${esc(st === 'new' ? 'waiting' : st)}</span>${l.reply ? `<span class="reply">${esc(l.reply)}</span>` : ''}</span>${act}</div>`;
+}
+function kidRow(l, sp) {
+  if (l.kind === 'note') return noteRow(l, true);
+  const txt = l.mark ? l.raw.trim() : l.kind === 'skip' ? `skip ${(sp.b - sp.a).toFixed(2)} s` : l.kind === 'cap' ? quoted(l.raw).replace(/\s*\|\s*/g, ' · ') : `${l.kind} ${quoted(l.raw)}`.trim();
+  return `<div class="ln kid${l.off ? ' off' : ''}${l.mark ? ' hist' : ''}" ${rowAt(l)}><span class="br">└</span>` +
+    `<span class="id">${esc(l.id)}</span><span class="tm">${sp ? sp.a.toFixed(2) : ''}</span><span class="src" title="${esc(l.raw.trim())}">${esc(txt)}</span></div>`;
+}
+function renderCode() {
+  const on = !!(info && info.edit);
+  $('codecard').style.display = on ? '' : 'none'; $('notes').style.display = on ? 'none' : '';
+  $('nhint').innerHTML = on ? 'Draw on the frame (optional; ✎ draw shows a 100 px grid that goes into the note picture), then type. <b>Enter</b> saves the note in edit.txt. Say <b>check notes</b> in a chat: all new notes are applied as one batch and get a reply here.'
+    : 'Each note keeps its time and frame. Say <b>check notes</b> in the chat: all new notes are applied as one batch and get a reply here.';
+  if (!on) return;
+  const box = $('code'), top = box.scrollTop;
+  const lines = info.edit.lines.filter(l => l.raw.trim() && !l.mark);
+  const heads = lines.filter(l => (l.kind === 'say' || l.kind === 'use') && !l.mark).map(l => ({ l, sp: rawSpan(l), kids: [] })).filter(h => h.sp);
+  heads.sort((x, y) => x.sp.c === y.sp.c ? x.sp.a - y.sp.a : 0);
+  const home = (l, sp) => {   // the sentence a line goes under
+    if (l.mark && (l.kind === 'say' || l.kind === 'use')) return heads.find(h => h.l.id === l.id);
+    const same = heads.filter(h => h.sp.c === sp.c), mid = (sp.a + sp.b) / 2;
+    let i = same.findIndex(h => mid >= h.sp.a && mid < h.sp.b);
+    if (l.kind === 'skip' && i >= 0 && same[i].sp.b - sp.b < 0.3 && i + 1 < same.length) i++;   // a pause before the next sentence
+    if (i < 0) i = same.findIndex(h => h.sp.a >= sp.a);
+    return same[i >= 0 ? i : same.length - 1];
+  };
+  const setup = [], loose = [];
+  for (const l of lines) {
+    if (heads.some(h => h.l === l)) continue;
+    const sp = l.kind ? rawSpan(l) : null, h = sp && home(l, sp);
+    if (h) h.kids.push({ l, sp }); else if (l.kind === 'note') loose.push(l); else setup.push(l);
+  }
+  let html = `<div class="fold" data-fold="1">${setupOpen ? '▾' : '▸'} setup <span class="st">${setup.length} lines</span></div>`;
+  if (setupOpen) html += setup.map(l => `<div class="ln kid setup${l.off ? ' off' : ''}${l.mark ? ' hist' : ''}" ${rowAt(l)}><span class="src" title="${esc(l.raw.trim())}">${esc(l.raw.trim())}</span></div>`).join('');
+  for (const h of heads) {
+    const l = h.l, txt = quoted(l.raw) || `${l.kind} ${h.sp.a.toFixed(2)}–${h.sp.b.toFixed(2)}`;
+    html += `<div class="ln${l.off ? ' off' : ''}" ${rowAt(l)}><span class="id">${esc(l.id)}</span><span class="tm">${h.sp.a.toFixed(2)}</span><span class="src" title="${esc(l.raw.trim())}">${esc(txt)}</span></div>`;
+    html += h.kids.sort((x, y) => x.sp.a - y.sp.a).map(k => kidRow(k.l, k.sp)).join('');
+  }
+  html += loose.map(l => noteRow(l, false)).join('');
+  box.innerHTML = html;
+  box.scrollTop = top;
+  markActive();
+}
+function markActive() {
+  if (!info || !info.edit) return;
+  for (const r of $('code').querySelectorAll('.ln[data-t]')) {
+    const a = parseFloat(r.dataset.t), b = parseFloat(r.dataset.t1);
+    const on = !isNaN(a) && (isNaN(b) ? Math.abs(t - a) < 0.5 / fps : t >= a - 1e-6 && t < b);
+    r.classList.toggle('on', on);
+  }
+}
+function editsHere() {
+  const r = $('code').querySelector('.ln.on:not(.note)') || $('code').querySelector('.ln.on');
+  if (r) r.scrollIntoView({ block: 'center', behavior: 'smooth' }); else msg('no line at ' + fmtT(t));
+}
+$('here').onclick = editsHere;
+$('code').onclick = async e => {
+  if (e.target.tagName === 'INPUT') return;
+  const u = e.target.dataset && e.target.dataset.undo;
+  if (u) { const r = await post('/enote/undo', { id: u }); msg(r.error ? r.error : `note ${u} undone: ${r.lines.join(', ')} put back`, r.error ? 'bad' : 'good'); return; }
+  const ss = e.target.dataset && e.target.dataset.ans;
+  if (ss) { answering = ss; $('note').placeholder = `Answer ${ss}: 1, 2, 3 or your words. Enter sends (Esc: cancel)`; $('add').textContent = 'Send answer'; $('note').focus(); return; }
+  const rd = e.target.dataset && e.target.dataset.redo;
+  if (rd) { const r = await post('/enote/redo', { id: rd }); msg(r.error ? r.error : `note ${rd} redone: ${r.lines.join(', ')}`, r.error ? 'bad' : 'good'); return; }
+  if (e.target.closest('[data-fold]')) { setupOpen = !setupOpen; renderCode(); return; }
+  const row = e.target.closest('.ln'); if (!row) return;
+  // jump to the line, where its words are fully shown (after the fade-in), not to its first frame
+  if (row.dataset.t !== '' && row.dataset.t !== undefined) { const a = parseFloat(row.dataset.t), b = parseFloat(row.dataset.t1); seek(isNaN(b) || b <= a ? a + 0.5 / fps : Math.min(a + 0.15, (a + b) / 2)); }
+};
+// drawing on the frame (✎ draw: a drag = a rectangle; its edge moves it, a corner resizes it): the strokes go with the next note, with the lines under them (GET /boxes)
+let viewRect = null;   // cached bounding rect during drag/stroke to avoid layout thrashing
+const worldAt = e => { const r = viewRect || $('view').getBoundingClientRect(); return [(e.clientX - r.left) / r.width * info.world[0], (e.clientY - r.top) / r.height * info.world[1]]; };
+$('view').onpointerdown = e => {
+  if (!info || !info.edit || playing || e.button !== 0) return;
+  e.preventDefault();   // no image drag (it would cancel the stroke)
+  viewRect = $('view').getBoundingClientRect();   // cache once per gesture
+  try { $('view').setPointerCapture(e.pointerId); } catch (err) {}
+  const p = worldAt(e);
+  if (drawMode) { inkEdit = inkAt(p); if (!inkEdit) stroke = [p]; return; }   // ✎ draw on: ink only; a drawn box moves / resizes
+  const m = handAt(p);
+  if (m) { held = null; startDrag({ mode: m, p0: p, cur: p, box0: { ...hand.box }, alt: e.altKey }, hand.id); hover = null; drawOverlay(); return; }
+  // press on a draggable (the boxes are cached): select it and move it in the same gesture (only when ✎ draw is off)
+  const pad = 8 * info.world[0] / $('view').clientWidth;
+  const list = boxes.list && boxes.key === t.toFixed(4) + '|' + ver ? boxes.list : null;
+  const b = list && [...list].reverse().find(q => draggable(q, list) && q.x - pad <= p[0] && p[0] <= q.x + q.w + pad && q.y - pad <= p[1] && p[1] <= q.y + q.h + pad);
+  if (b) { held = null; makeHand(b); startDrag({ mode: 'move', p0: p, cur: p, box0: { ...b }, alt: e.altKey }, b.id); hover = null; drawOverlay(); return; }
+  const full = list && [...list].reverse().find(q => fullFx(q, list) && lineOf(q.id) && q.x - pad <= p[0] && p[0] <= q.x + q.w + pad && q.y - pad <= p[1] && p[1] <= q.y + q.h + pad);
+  if (full) msg(list.some(o => o.id.startsWith(full.id + '.')) ? `fx ${full.id}: drag one of its parts` : `fx ${full.id}: full-frame fx, no parts to drag`);
+  if (!list) {
+    fetchBoxes().then(l => {
+      const hit = l && [...l].reverse().find(q => draggable(q, l) && q.x - pad <= p[0] && p[0] <= q.x + q.w + pad && q.y - pad <= p[1] && p[1] <= q.y + q.h + pad);
+      if (hit) { makeHand(hit); drawOverlay(); }
+      else if (hand) { hand = null; drawOverlay(); }
+    });
+  } else if (hand) {
+    hand = null; drawOverlay();   // empty click: deselect
+  }
+};
+$('view').onpointermove = e => {
+  if (fdrag) { fdrag.cur = worldAt(e); fdrag.alt = e.altKey; drawOverlay(); return; }
+  if (inkEdit && drawMode) { moveInk(worldAt(e)); return; }
+  if (drawMode && !stroke) { const m = inkAt(worldAt(e)); $('view').style.cursor = m ? (m.mode === 'size' ? 'nwse-resize' : 'move') : 'crosshair'; }
+  if (stroke && drawMode) {   // the ink is a rectangle from the press to the pointer (a closed line of its corners)
+    const [a, b] = [stroke[0], worldAt(e)];
+    stroke = [a, [b[0], a[1]], b, [a[0], b[1]], a]; drawOverlay();
+  }
+  else if (drawMode) {}   // ✎ draw on: pen over the frame, no hover hints
+  else if (info && info.edit && !playing) {
+    const p = worldAt(e), list = boxes.list && boxes.key === t.toFixed(4) + '|' + ver ? boxes.list : null;
+    const pad = 6 * info.world[0] / $('view').clientWidth;
+    if (list) {
+      const b = [...list].reverse().find(q => draggable(q, list) && (!hand || q.id !== hand.id) && q.x - pad <= p[0] && p[0] <= q.x + q.w + pad && q.y - pad <= p[1] && p[1] <= q.y + q.h + pad);
+      if ((b ? b.id : null) !== hover) { hover = b ? b.id : null; if (hover) getLift(hover); drawOverlay(); }   // prefetch: a press drags at once
+    } else if (!hoverBusy) { hoverBusy = true; fetchBoxes().then(() => hoverBusy = false); }   // the boxes come in; the next move shows the hint
+    const m = handAt(p);
+    $('view').style.cursor = m === 'size' ? 'nwse-resize' : m === 'move' ? 'move' : hover ? 'move' : '';
+  }
+};
+$('view').onpointerleave = () => { clearTimeout(restTimer); if (hover) { hover = null; drawOverlay(); } };   // no hint off the frame
+// the note point: the spot "this" means. A press on the paused frame = a dot (a red ring); else the last spot the
+// mouse rested on the frame (REST_MS), so the quick move to the note box does not count (user pick, 2026-10-30)
+const REST_MS = 400, DOT_HIT_PX = 16;   // DOT_HIT_PX: a press this near the dot (screen px) removes it
+$('view').addEventListener('pointermove', e => {
+  clearTimeout(restTimer);
+  if (!info || !info.edit || (notePt && notePt.by === 'dot')) return;
+  const p = worldAt(e);
+  restTimer = setTimeout(() => { if (!notePt || notePt.by !== 'dot') notePt = { p, by: 'rest', t }; }, REST_MS);
+});
+$('view').addEventListener('pointerdown', e => {
+  if (!info || !info.edit || playing || drawMode || e.button !== 0) return;
+  clearTimeout(restTimer);   // a rest timer from the move before the press would overwrite the dot
+  const p = worldAt(e), r = $('view').getBoundingClientRect();
+  const onDot = notePt && notePt.by === 'dot' && Math.hypot(p[0] - notePt.p[0], p[1] - notePt.p[1]) * r.width / info.world[0] < DOT_HIT_PX;
+  notePt = onDot ? null : { p, by: 'dot', t }; drawOverlay();   // a press on the dot removes it (user pick, 2026-10-30)
+});
+$('view').onpointerup = $('view').onpointercancel = () => { viewRect = null; if (fdrag) finishDrag(); else if (inkEdit) { inkEdit = null; $('note').focus(); } else if (drawMode) endStroke(); };
+// a drawn box: drag its edge = move, drag a corner = resize (the opposite corner stays), a press inside = a new box
+// (a small box inside a big one); the last drawn is on top
+let inkEdit = null;
+const inkBox = s => { const xs = s.map(q => q[0]), ys = s.map(q => q[1]); return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]; };
+const inkRect = (x0, y0, x1, y1) => [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]];
+function inkAt(p) {
+  const r = 16 * info.world[0] / $('view').clientWidth;
+  for (let i = strokes.length - 1; i >= 0; i--) {
+    const [x0, y0, x1, y1] = inkBox(strokes[i]);
+    for (const [cx, cy, fx, fy] of [[x0, y0, x1, y1], [x1, y0, x0, y1], [x0, y1, x1, y0], [x1, y1, x0, y0]])
+      if (Math.hypot(p[0] - cx, p[1] - cy) < r) return { i, mode: 'size', fix: [fx, fy] };
+    const inX = p[0] >= x0 - r && p[0] <= x1 + r, inY = p[1] >= y0 - r && p[1] <= y1 + r;
+    const edge = (inY && (Math.abs(p[0] - x0) < r || Math.abs(p[0] - x1) < r)) || (inX && (Math.abs(p[1] - y0) < r || Math.abs(p[1] - y1) < r));
+    if (edge) return { i, mode: 'move', p0: p, b0: [x0, y0, x1, y1] };
+  }
+  return null;
+}
+function moveInk(p) {
+  const d = inkEdit;
+  if (d.mode === 'size') strokes[d.i] = inkRect(d.fix[0], d.fix[1], p[0], p[1]);
+  else { const dx = p[0] - d.p0[0], dy = p[1] - d.p0[1], b = d.b0; strokes[d.i] = inkRect(b[0] + dx, b[1] + dy, b[2] + dx, b[3] + dy); }
+  drawOverlay();
+}
+
+// ───────────── move / resize any element on the frame: the hand edit (no list, no kinds) ─────────────
+// Press an element (Shift draws a note over it instead) to select + move it in the same gesture; a click selects it
+// (corner handles). Drag inside it: move (the middle snaps to the centre line; Alt skips the snap). Drag a corner:
+// resize around its middle. Release = ONE key on the element's own line, nudge=dx,dy,k (move dx,dy, scale k about the
+// frame centre; the engine applies it where it marks the element, prelude mark()), through POST /lineset
+// (editfile::set_line, 0 tokens); Ctrl+Z undoes it. A caption's element is its moment (the moment line holds the nudge).
+// a part of an fx (f.part in lib/edit.js) has the element id "ID.PART": its line is ID, its key nudge.PART
+const partOf = id => { const i = id.indexOf('.'); return i < 0 ? null : id.slice(i + 1); };
+const lineOf = id => { const lid = id.split('.')[0]; return info.edit.lines.find(l => l.id === lid && l.kind && l.kind !== 'note' && !l.mark && !l.off); };
+// a whole fx layer is not dragged when it fills the frame or has parts (a nudge= there moves everything at once)
+const fullFx = (q, list) => q.kind === 'fx' && !partOf(q.id) && ((q.w >= 0.98 * info.world[0] && q.h >= 0.98 * info.world[1]) || (list || []).some(o => o.id.startsWith(q.id + '.')));
+const draggable = (q, list) => !!lineOf(q.id) && !fullFx(q, list);
+const hoverName = id => (lineOf(id) || {}).kind || 'element';   // the hover hint's label
+function handAt(p) {
+  if (!hand || !hand.box || !info) return null;
+  const b = hand.box, r = 16 * info.world[0] / $('view').clientWidth;   // 16 screen px
+  for (const [cx, cy] of [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]]) if (Math.hypot(p[0] - cx, p[1] - cy) < r) return 'size';
+  const pad = 6 * info.world[0] / $('view').clientWidth;
+  return p[0] >= b.x - pad && p[0] <= b.x + b.w + pad && p[1] >= b.y - pad && p[1] <= b.y + b.h + pad ? 'move' : null;
+}
+function dragGeom(d) {
+  const cx0 = d.box0.x + d.box0.w / 2, cy0 = d.box0.y + d.box0.h / 2, W = info.world[0];
+  if (d.mode === 'move') {
+    let dx = d.cur[0] - d.p0[0], dy = d.cur[1] - d.p0[1], snap = false;
+    if (!d.alt && Math.abs(cx0 + dx - 0.5 * W) < 16 * W / $('view').clientWidth) { dx = 0.5 * W - cx0; snap = true; }
+    return { dx, dy, k: 1, snap, box: { x: d.box0.x + dx, y: d.box0.y + dy, w: d.box0.w, h: d.box0.h }, changed: Math.abs(dx) + Math.abs(dy) > 2 };
+  }
+  const k = Math.max(0.2, Math.min(5, Math.hypot(d.cur[0] - cx0, d.cur[1] - cy0) / Math.max(1, Math.hypot(d.p0[0] - cx0, d.p0[1] - cy0))));
+  return { dx: 0, dy: 0, k, box: { x: cx0 - d.box0.w * k / 2, y: cy0 - d.box0.h * k / 2, w: d.box0.w * k, h: d.box0.h * k }, changed: Math.abs(k - 1) > 0.01 };
+}
+function makeHand(b) {   // the hand for a pressed / clicked box: the element's own line
+  hand = { id: b.id, box: b, line: lineOf(b.id) };
+  msg(`${hand.line.kind} ${b.id}: drag it to move, drag a corner to resize (Ctrl+Z undoes)`);
+  return hand;
+}
+async function pickText(p) {
+  const list = await fetchBoxes();
+  const pad = 8 * info.world[0] / $('view').clientWidth;
+  const hit = list.filter(b => b.x - pad <= p[0] && p[0] <= b.x + b.w + pad && b.y - pad <= p[1] && p[1] <= b.y + b.h + pad).reverse().find(b => draggable(b, list));
+  hand = hit ? makeHand(hit) : null;
+  drawOverlay();
+}
+async function finishDrag() {
+  const d = fdrag; fdrag = null;
+  badge('exact', 'exact');
+  if (!d || !hand) { drawOverlay(); return; }
+  const gm = dragGeom(d);
+  const l = hand.line || lineOf(hand.id);
+  if (!gm.changed || !l) { drawOverlay(); return; }
+  // the old nudge T0(p) = C + k0 (p - C) + d0; a move adds to d0; a resize by s about the box middle e (on screen,
+  // already nudged): k = s k0, d = s d0 + (1 - s)(e - C)
+  const key = partOf(hand.id) ? 'nudge.' + partOf(hand.id) : 'nudge';
+  const [dx0, dy0, k0] = ((l.kv || {})[key] || '0,0,1').split(',').map(Number), C = [info.world[0] / 2, info.world[1] / 2];
+  const e = [d.box0.x + d.box0.w / 2, d.box0.y + d.box0.h / 2], s = gm.k;
+  const nd = d.mode === 'move' ? [dx0 + gm.dx, dy0 + gm.dy, k0] : [s * dx0 + (1 - s) * (e[0] - C[0]), s * dy0 + (1 - s) * (e[1] - C[1]), s * k0];
+  const set = { [key]: `${Math.round(nd[0])},${Math.round(nd[1])},${+nd[2].toFixed(3)}` };
+  const what = d.mode === 'move' ? `moved ${Math.round(Math.hypot(gm.dx, gm.dy))} px` : `scaled to ${Math.round(gm.k * 100)}%`;
+  // the lift stays at the new spot until the frame of the new version arrives (exact() drops it)
+  held = { ...d, gm, verBefore: ver };
+  badge('draft', 'moved · the new frame renders');
+  hand.box = { ...gm.box };
+  drawOverlay();
+  const r = await post('/lineset', { n: l.n, raw: l.raw, set });
+  msg(r.error ? r.error : `${l.kind} ${hand.id}: ${what} (${r.line.trim()})`, r.error ? 'bad' : 'good');
+  if (!r.error) {
+    hand.line = lineOf(hand.id);   // the line just changed; re-read it
+    pollOnce();
+    setTimeout(pollOnce, 120);
+    setTimeout(pollOnce, 300);
+  } else {
+    // lineset failed: back to the original spot
+    held = null; hand.box = d.box0;
+    drawOverlay();
+  }
+}
+function drawHand(g, k, dpr) {
+  const cur = boxes.list && boxes.key === t.toFixed(4) + '|' + ver;
+  if (!fdrag && !held) {   // not moving: the box follows the file's boxes
+    if (!cur) { fetchBoxes(); return; }
+    const nb = boxes.list.find(b => b.id === hand.id);
+    if (!nb) { hand = null; return; }   // the element is gone (hidden, line off): the hand goes too
+    hand.box = nb;
+  }
+  if (!hand.box) return;
+  const gm = fdrag ? dragGeom(fdrag) : null, b = gm ? gm.box : hand.box, px = dpr / k, hs = 6 * px;
+  g.setTransform(k, 0, 0, k, 0, 0);
+
+  if (gm && gm.snap) { g.setLineDash([]); g.lineWidth = 1.5 * px; g.strokeStyle = '#7c6cff'; g.beginPath(); g.moveTo(info.world[0] / 2, 0); g.lineTo(info.world[0] / 2, info.world[1]); g.stroke(); }
+  if (gm) { g.setLineDash([4 * px, 4 * px]); g.lineWidth = 1 * px; g.strokeStyle = 'rgba(255,255,255,0.5)'; g.strokeRect(fdrag.box0.x, fdrag.box0.y, fdrag.box0.w, fdrag.box0.h); }
+  g.setLineDash([]); g.lineWidth = 4 * px; g.strokeStyle = 'rgba(0,0,0,0.55)'; g.strokeRect(b.x, b.y, b.w, b.h);
+  g.setLineDash([7 * px, 5 * px]); g.lineWidth = 2 * px; g.strokeStyle = '#ffd34d'; g.strokeRect(b.x, b.y, b.w, b.h);
+  g.setLineDash([]); g.fillStyle = '#ffd34d'; g.strokeStyle = '#111'; g.lineWidth = 1.5 * px;
+  for (const [x, y] of [[b.x, b.y], [b.x + b.w, b.y], [b.x, b.y + b.h], [b.x + b.w, b.y + b.h]]) { g.fillRect(x - hs, y - hs, 2 * hs, 2 * hs); g.strokeRect(x - hs, y - hs, 2 * hs, 2 * hs); }
+  if (gm && fdrag.mode === 'size') { g.font = `700 ${12 * px}px system-ui`; g.fillStyle = '#ffd34d'; g.fillText('×' + gm.k.toFixed(2), b.x, b.y - 8 * px); }
+  g.setTransform(1, 0, 0, 1, 0, 0);
+}
+function endStroke() {
+  if (!stroke) return;
+  const s = stroke; stroke = null;
+  const xs = s.map(p => p[0]), ys = s.map(p => p[1]);
+  if (Math.max(...xs) - Math.min(...xs) + Math.max(...ys) - Math.min(...ys) > 12) { strokes.push(s); fetchBoxes(); $('note').focus(); msg('drawn: now type the note (Esc clears the ink and leaves draw mode)'); }
+  drawOverlay();
+}
+function clearDrawing() { strokes = []; stroke = null; drawOverlay(); }
+$('clrdraw').onclick = () => { clearDrawing(); msg('drawing cleared'); $('note').focus(); };
+async function coversOf() {
+  const list = await fetchBoxes(), pad = 4, ids = [];   // the rectangle is exact: a small pad
+  const pts = strokes.flat(), x0 = Math.min(...pts.map(p => p[0])) - pad, x1 = Math.max(...pts.map(p => p[0])) + pad;
+  const y0 = Math.min(...pts.map(p => p[1])) - pad, y1 = Math.max(...pts.map(p => p[1])) + pad;
+  for (const b of list) if (b.kind && b.x < x1 && b.x + b.w > x0 && b.y < y1 && b.y + b.h > y0 && !ids.includes(b.id)) ids.push(b.id);
+  return ids;
+}
+function strokePng() {
+  const c = document.createElement('canvas'), k = 0.5; c.width = info.world[0] * k; c.height = info.world[1] * k;
+  const g = c.getContext('2d'); g.lineCap = g.lineJoin = 'round';
+  drawDrawGrid(g, k, 1);   // the drawing goes to the agent with its grid, so it can measure it
+  g.setTransform(k, 0, 0, k, 0, 0); g.lineWidth = 8; g.strokeStyle = '#ffd34d';
+  for (const s of strokes) { g.beginPath(); s.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke(); }
+  strokes.forEach((s, i) => inkNum(g, s, i + 1, 1 / k));
+  return c.toDataURL('image/png');
+}
+// a drawn box's number (1, 2 …) on its top-left corner, so a note can say "1 -> 2"; px = one screen px in world units
+function inkNum(g, s, n, px) {
+  const xs = s.map(q => q[0]), ys = s.map(q => q[1]), x = Math.min(...xs), y = Math.min(...ys), r = 14 * px;
+  g.fillStyle = '#ffd34d'; g.beginPath(); g.arc(x, y, r, 0, 2 * Math.PI); g.fill();
+  g.fillStyle = '#000'; g.font = `700 ${18 * px}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(n), x, y + px);
+}
+
+// ───────────── the song's loudness (a drag control: the gain= of the song line) ─────────────
+const songLine = () => info && info.edit && info.edit.lines.find(l => l.kind === 'song' && !l.off && !l.mark);
+const songGain = l => { const m = /\bgain=(-?\d+(?:\.\d+)?)/.exec(l.raw); return m ? +m[1] : -12; };   // audio.rs default
+function renderSong() {
+  const l = songLine(), on = !!l;
+  $('songsw').style.display = on ? 'flex' : 'none'; $('songsep').style.display = on ? '' : 'none';
+  if (!on || document.activeElement === $('songgain')) return;
+  $('songgain').value = songGain(l); $('songdb').textContent = songGain(l) + ' dB';
+}
+$('songgain').oninput = () => { $('songdb').textContent = $('songgain').value + ' dB'; };
+$('songgain').onchange = async () => {
+  const l = songLine(); if (!l) return;
+  const g = +$('songgain').value, old = songGain(l);
+  if (g === old) return;
+  const r = await post('/lineset', { n: l.n, raw: l.raw, set: { gain: g } });
+  msg(r.error ? r.error : `song ${l.id}: gain ${old} -> ${g} dB (the sound re-mixes in ~3 s)`, r.error ? 'bad' : 'good');
+  $('songgain').blur();
+  if (r.error) { $('songgain').value = old; $('songdb').textContent = old + ' dB'; }
+  else { pollOnce(); setTimeout(pollOnce, 120); }
+};
+
+// ───────────── controls ─────────────
+$('play').onclick = togglePlay;
+$('zin').onclick = () => zoomAt(Math.max(G, X(t)), 1 / 1.6);
+$('zout').onclick = () => zoomAt(Math.max(G, X(t)), 1.6);
+$('zfit').onclick = () => { fitView(); requestDraw(); };
+$('undo').onclick = undo; $('redo').onclick = redo;
+$('gridon').onchange = () => { gridOn = $('gridon').checked; drawOverlay(); };
+$('drawon').onchange = () => { drawMode = $('drawon').checked; hover = null; drawOverlay(); msg(drawMode ? 'draw mode: the frame takes ink only (Esc: back to move)' : 'move mode: press an element to drag it'); };
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('button'); if (b) b.blur(); });
+document.addEventListener('keydown', e => {
+  const tag = e.target.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') { if (e.key === 'Escape') e.target.blur(); return; }
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if (mod && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); redo(); return; }
+  if (mod || e.altKey || !info) return;
+  const k = e.key;
+  if (info.edit) {
+    // an edit-file job: just type to write a note; Enter: the lines at the playhead
+    if (k === 'Enter') { e.preventDefault(); editsHere(); return; }
+    if (k.length === 1 && k !== ' ') { e.preventDefault(); $('note').focus(); $('note').value += k; return; }
+    if (k === 'Escape') {   // first: out of ✎ draw; then: clear the ink; then: resume the normal flow; then: deselect
+      if (drawMode) { $('drawon').checked = drawMode = false; msg('move mode: press an element to drag it'); }
+      if (strokes.length) { clearDrawing(); return; }
+      if (hand) { hand = null; drawOverlay(); return; }
+      drawOverlay(); return;
+    }
+  }
+  if (k === ' ') { e.preventDefault(); togglePlay(); }
+  else if (k === 'ArrowLeft' || k === 'ArrowRight') { e.preventDefault(); seek(t + (k === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 1 : 1 / fps)); }
+  else if (k === 'Home') seek(0); else if (k === 'End') seek(lastT());
+  else if (k === 'n' || k === 'N') { e.preventDefault(); $('note').focus(); }
+  else if ((k === 'g' || k === 'G') && info.layout) { $('gridon').checked = gridOn = !gridOn; drawOverlay(); }
+  else if (k === 'z' || k === 'Z') { if (view.fit) { const w = $('tl').clientWidth - G; view.s = 8 / w; view.fit = false; view.a = t - 4; clampView(); } else fitView(); requestDraw(); }
+  else if ((k === 'Delete' || k === 'Backspace') && sel !== null) { e.preventDefault(); toggleHide(sel); }
+  else if (k === 'Escape') { sel = null; hand = null; held = null; range = null; renderInspector(); updateTime(); drawOverlay(); requestDraw(); if (!playing) preview(); }
+});
+window.addEventListener('resize', () => { viewRect = null; fitStage(); layoutLanes(); if (view.fit) fitView(); requestDraw(); });
+
+// ───────────── the engine's state (polled; small JSON) ─────────────
+const opened = Date.now();
+let pollTimer = null;
+async function pollOnce() {
+  try {
+    const v = await (await fetch('/version')).json();
+    draftStatus(v);
+    if (v.version !== ver) await load();
+    if (v.notes !== notesStamp && !(info && info.edit)) { notesStamp = v.notes; await loadNotes(); }
+    // `aios seek JOB T`: the agent shows a moment
+    if (v.seek && v.seek.id !== seekId) {
+      const fresh = seekId !== null || v.seek.id > opened - 20000; seekId = v.seek.id;
+      if (fresh) { if (v.seek.beat !== null && v.seek.beat !== undefined) select(v.seek.beat, false); seek(v.seek.t); }
+    }
+  } catch (e) {}
+}
+async function poll() {
+  clearTimeout(pollTimer);
+  await pollOnce();
+  pollTimer = setTimeout(poll, 400);
+}
+load().then(poll);
+
+// ─── library: the pick lists (GET /library). A click on a name puts it into the note box; ▶ plays the file.
+// Lists and preview only: the agent does the edit from the note (AI edits first; no drag to the timeline).
+(function () {
+  const TABS = { moves: 'Moves', looks: 'Looks', fx: 'Effects', sfx: 'Sounds', songs: 'Songs' };
+  const SAY = { moves: n => n, looks: n => `look ${n}`, fx: n => `fx ${n}`, sfx: n => `sfx ${n}`, songs: (n, r) => `song ${r.title}` };
+  let lib = null, tab = 'moves', aud = new Audio(), playing = null;
+  const src = f => '/lib?p=' + encodeURIComponent(f);
+  function stop() { aud.pause(); const v = $('libvid'); v.pause(); v.style.display = 'none'; playing = null; }
+  function play(f, btn) {
+    const was = playing; stop(); document.querySelectorAll('#liblist .pl').forEach(b => b.textContent = '▶');
+    if (was === f) return;
+    playing = f; btn.textContent = '■';
+    if (f.endsWith('.mp4')) { const v = $('libvid'); v.src = src(f); v.style.display = 'block'; v.play(); }
+    else { aud.src = src(f); aud.play(); aud.onended = () => { btn.textContent = '▶'; playing = null; }; }
+  }
+  function row(r) {
+    const when = [].concat(r.when || []).join('; '), avoid = [].concat(r.avoid || []).join('; ');
+    const what = [r.title, r.mood && [].concat(r.mood).join(', '), r.what].filter(Boolean).join(' · ');
+    const fs = (r.files || [r.file]).filter(Boolean);
+    return `<li><span class="nm" data-n="${esc(r.name)}">${esc(r.name)}</span><span class="wh">${esc(what)}${when ? ` · <b>${esc(when)}</b>` : ''}${avoid ? ` · avoid: ${esc(avoid)}` : ''}</span>` +
+      fs.map(f => /\.(mp4|mp3|wav)$/.test(f) ? `<button class="mini pl" data-f="${esc(f)}" title="${esc(f)}">▶</button>` : '').join('') + '</li>';
+  }
+  function show() {
+    $('libtabs').innerHTML = Object.entries(TABS).map(([k, v]) => `<button class="small${k === tab ? ' on' : ''}" data-tab="${k}">${v}</button>`).join('');
+    $('liblist').innerHTML = (lib[tab] || []).map(row).join('');
+  }
+  async function toggle() {
+    const open = $('lib').classList.toggle('open');
+    if (!open) return stop();
+    lib = await (await fetch('/library')).json(); show();   // read again on each open: new looks and songs show at once
+  }
+  $('libbtn').onclick = toggle;
+  document.addEventListener('keydown', e => {
+    if (e.target.closest('input,textarea') || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'l' || e.key === 'L') toggle();
+    else if (e.key === 'Escape' && $('lib').classList.contains('open')) toggle();
+  });
+  $('libtabs').onclick = e => { const k = e.target.dataset.tab; if (k) { tab = k; stop(); show(); } };
+  $('liblist').onclick = e => {
+    const b = e.target.closest('.pl'); if (b) return play(b.dataset.f, b);
+    const n = e.target.closest('.nm'); if (!n) return;
+    const r = (lib[tab] || []).find(x => x.name === n.dataset.n), w = SAY[tab](n.dataset.n, r), box = $('note');
+    box.value = box.value ? box.value.replace(/\s*$/, ' ') + w : w; box.focus();
+  };
+})();
+</script>
+</body></html>

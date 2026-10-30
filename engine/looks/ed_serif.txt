@@ -1,0 +1,3 @@
+# look ed_serif: editorial bundle - a serif accent word next to an ed_word; soft in, drift out
+font InstrumentSerif "../fonts/looks/InstrumentSerif.ttf"
+style  ed_serif font=InstrumentSerif size=150 color=#f2efe8 enter=soft exit=drift shadow

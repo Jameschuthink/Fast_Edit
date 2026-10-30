@@ -1,0 +1,10 @@
+# aios.toml - where this workspace keeps things; the engine holds no folder names (dev/engine/CLI_LAYOUT.md)
+# Format: key = "path" per line, relative to this folder. Every key is required; an unknown key is an error.
+jobs = "jobs"                       # aios draft JOB -> jobs/JOB; a full path to a job folder also works
+                                    # (aios final / still -> jobs/JOB/final/DATE_JOB.mp4|png: inside the job, no key)
+templates = "_templates"            # aios new -> _templates/NAME
+logs = "logs"                       # perf + trace logs
+songs = "library/songs"             # songs.json + files (song lines, page library)
+sfx = "library/sfx"                 # index.json + files
+refs = "library/refs"               # page library: reference clips
+skills = ".claude/skills"           # nvidia nv.py, reframe, ffmpeg-skill color.py, sfx recipes + sfx.py

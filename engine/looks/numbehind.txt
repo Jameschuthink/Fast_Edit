@@ -1,0 +1,3 @@
+# look numbehind: made in a test job for the note "make the five hour bigger and one hour bigger while the arrow make it smaller and leaner.Check the images and if the 5 h"
+font MontBlack "../fonts/looks/Montserrat-Black.ttf"
+style numbehind font=MontBlack size=220 color=#ffffff pop=0.1 shadow behind y=540

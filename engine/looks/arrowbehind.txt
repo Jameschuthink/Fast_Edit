@@ -1,0 +1,3 @@
+# look arrowbehind: made in a test job for the note "I want the 5 hours on my left and then 1 hour on the right while the arrow is showing behind me."
+font MontBlack "../fonts/looks/Montserrat-Black.ttf"
+style arrowbehind font=MontBlack size=1400 color=#ffffff in=0.15 grow=1 fit=1000 behind y=540

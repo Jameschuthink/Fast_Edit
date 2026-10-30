@@ -1,0 +1,3 @@
+# look scene_big: one big Garamond word under a b-roll clip (story "STORYTELLING"); a big line on a clip scene uses it
+font CapGaramond "../fonts/captions/apple_garamond/AppleGaramond-Italic.ttf"
+style scene_big font=CapGaramond size=200 color=#ffffff enter=soft exit=fade fit=960

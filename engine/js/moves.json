@@ -1,0 +1,13 @@
+[
+  {"name": "enter=soft", "what": "small rise, blur to sharp, calm (0.32 s)", "when": "default for most words", "file": "library/refs/moves/1_in_soft.mp4"},
+  {"name": "enter=rise", "what": "moves up into place, no blur (0.22 s)", "when": "clean, quick lines", "file": "library/refs/moves/2_in_rise.mp4"},
+  {"name": "enter=blur", "what": "very blurred to sharp, in place (0.22 s)", "when": "a thought coming into focus", "file": "library/refs/moves/3_in_blur.mp4"},
+  {"name": "enter=wipe", "what": "shows left to right (0.16 s)", "when": "labels, sources, tool names", "file": "library/refs/moves/4_in_wipe.mp4"},
+  {"name": "enter=pop", "what": "grows from 82% with a small overshoot (0.18 s)", "when": "small words, chips", "file": "library/refs/moves/5_in_pop.mp4"},
+  {"name": "enter=slam", "what": "from 155%, blurred, lands hard (0.14 s)", "when": "the payoff, once or twice a reel", "file": "library/refs/moves/6_in_slam.mp4"},
+  {"name": "enter=blurpop", "what": "from 130%, blurred, lands fast (0.12 s)", "when": "numbers and stats", "file": "library/refs/moves/7_in_blurpop.mp4"},
+  {"name": "exit=fade", "what": "quick fade (0.12 s)", "when": "small text, labels", "file": "library/refs/moves/8_out_fade.mp4"},
+  {"name": "exit=blur", "what": "goes soft and fades (0.12 s)", "when": "after a slam or a number", "file": "library/refs/moves/9_out_blur.mp4"},
+  {"name": "exit=drift", "what": "goes up a little, softens, fades (0.28 s)", "when": "default, calm exit", "file": "library/refs/moves/10_out_drift.mp4"},
+  {"name": "steps=15", "what": "the move in stop-motion steps", "when": "a playful or crafted word", "file": null}
+]

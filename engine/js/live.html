@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AIOS3 moments</title>
+<!-- aios serve: the moment page (FLOW_SPEC step 3). Tabs: moments, assets, frame (the frame
+     editor, engine/js/editor.html, loaded when the tab opens). The job's files on the right. The page never renders:
+     stills and clips come from the engine's clip queue (engine/src/moments.rs) and show when their files are done.
+     A note saves its moment ID, the file it was written on, the playhead second in it, and an optional drawing. -->
+<style>
+:root{--bg:#111014;--panel:#1b1a20;--line:#2c2a33;--ink:#efece6;--mute:#8a8696;--dim:#5f5c6b;--acc:#f8e479;--ok:#5fd38d;--warn:#f0a35e;--bad:#ff6b6b}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:13px/1.45 system-ui,sans-serif}
+button,input{font:inherit;color:inherit}
+a{color:var(--acc)}
+.shell{display:grid;grid-template-columns:170px minmax(0,1fr) 270px;grid-template-rows:auto minmax(0,1fr);height:100vh}
+.shell.wide{grid-template-columns:170px minmax(0,1fr) 0}.shell.wide aside{display:none}
+header{grid-column:1/-1;display:flex;gap:12px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+header b{font-size:15px}
+
+#queue{color:var(--mute);font-size:12px}#err{color:var(--bad);font:12px ui-monospace,monospace;white-space:pre-wrap;max-width:60vw}
+nav{border-right:1px solid var(--line);padding:12px 8px;overflow:auto}
+nav .tab{display:block;width:100%;text-align:left;background:none;border:0;border-radius:6px;padding:7px 9px;cursor:pointer;color:var(--mute)}
+nav .tab:hover{background:#1f1e24}nav .tab.on{background:#28262e;color:var(--ink)}
+nav .hint{margin:14px 6px 0;padding-top:10px;border-top:1px solid var(--line)}
+main{overflow:auto;padding:14px 18px 0;position:relative;min-height:0}
+main.frame{padding:0;overflow:hidden}
+#editor{border:0;width:100%;height:100%;display:none;background:var(--bg)}
+aside{border-left:1px solid var(--line);overflow:auto;padding:10px 12px;font:12px/1.6 ui-monospace,monospace}
+aside summary{cursor:pointer}aside details{margin-left:10px}aside details.top{margin-left:0}
+aside a{display:block;margin-left:12px;color:var(--mute);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+aside a:hover{color:var(--acc)}aside .ai>summary{color:var(--dim)}
+h2{margin:0 0 4px;font-size:17px}.lead{color:var(--mute);margin:0 0 14px}
+.hint{color:var(--mute);font-size:12px}.dim{color:var(--mute)}.okc{color:var(--ok)}.miss{color:var(--bad)}
+.btn{background:#25232c;border:1px solid #37343f;border-radius:7px;padding:5px 11px;cursor:pointer}
+.btn:hover{border-color:#57536a}.btn:disabled{opacity:.4;cursor:default}
+.btn.pri{background:var(--acc);color:#000;border-color:var(--acc);font-weight:600}
+.btn.on{border-color:var(--acc);color:var(--acc)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;padding-bottom:16px}
+.card{position:relative;border-radius:8px;overflow:hidden;background:var(--panel);border:1px solid var(--line);cursor:pointer;display:block;color:inherit;text-decoration:none}
+.card.on{outline:2px solid var(--acc)}.card.off{opacity:.4}
+.card img,.card video,.card .ph{width:100%;display:block;aspect-ratio:9/16;object-fit:cover;background:#000}
+.ph{display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:12px;text-align:center;padding:8px;flex-direction:column;gap:6px}
+.ph .big{font-weight:800;font-size:30px;color:var(--acc)}
+.card .cap{padding:6px 8px;font-size:12px}
+.card.missing{border-color:var(--bad)}.card.missing .ph{color:var(--bad)}
+.kind{position:absolute;right:6px;top:6px;background:#000c;padding:0 6px;border-radius:4px;font-size:11px}
+.badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:99px;background:var(--warn);color:#000;font-size:11px;font-weight:700;text-align:center}
+.mid{font-weight:800;font-size:20px;color:var(--acc)}
+.wallbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px}.wallbar .grow{flex:1}.wallbar .chip{margin:0}
+.wall{display:grid;gap:10px;padding-bottom:16px}
+.mc{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}.mc.off{opacity:.4}.mc.on{outline:2px solid var(--acc)}
+.mv{position:relative;cursor:pointer}.mv video,.mv img,.mv .ph{width:100%;display:block;aspect-ratio:9/16;object-fit:cover;background:#000}
+.fsb{position:absolute;top:4px;right:4px;padding:0 6px;background:#000a;color:#fff;border:0;border-radius:4px;cursor:pointer;font-size:13px}
+.mc .cap{padding:5px 7px;font-size:11px;line-height:1.35}
+.nds{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px}.nd{font:10px ui-monospace,monospace;padding:0 4px;border-radius:6px;background:#f4c64f33;color:#f4c64f}
+.nd.s-done{background:#5fd38d22;color:#5fd38d}.nd.s-ask{background:#ff6b6b33;color:#ff6b6b;cursor:pointer}.nd.s-main{background:#5aa9ff22;color:#5aa9ff}
+.mn{width:100%;box-sizing:border-box;border:0;border-top:1px solid var(--line);background:transparent;color:inherit;padding:5px 7px;font-size:11px}
+.chip{display:inline-block;margin:0 6px 6px 0;padding:2px 10px;border:1px solid var(--line);border-radius:99px;cursor:pointer;font-size:12px;color:var(--mute)}
+.chip.on{border-color:var(--acc);color:var(--acc)}
+/* the note bar: under the grid (storyboard) or in the clip pop-up */
+.bar{position:sticky;bottom:0;margin:0 -18px;padding:10px 18px 12px;background:var(--panel);border-top:1px solid var(--acc);z-index:5}
+.notebar{display:flex;gap:6px;align-items:center}
+.notebar input{flex:1;min-width:120px;background:#0f0e12;border:1px solid var(--line);border-radius:6px;padding:7px 9px}
+.notebar input:focus{outline:none;border-color:var(--acc)}
+.notes{list-style:none;padding:0;margin:6px 0 0;font-size:12px;color:var(--mute);max-height:22vh;overflow:auto}
+.notes li{padding:2px 0}.notes b{color:var(--ink);font-weight:500}.notes .s-done b{color:var(--mute)}.notes .s-ask{color:var(--warn)}
+.fs{position:fixed;inset:0;background:#000;z-index:20;display:flex;flex-direction:column;align-items:center;padding:10px 10px 0}
+.fs .vw{position:relative;height:calc(100vh - 230px);display:flex;justify-content:center}
+.fs video{height:100%;width:auto;max-width:100%;display:block}
+.fs canvas{position:absolute;cursor:crosshair;touch-action:none}
+.fs #pd{position:absolute;cursor:crosshair}.pdot{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border:3px solid #ff3b30;border-radius:50%;box-shadow:0 0 0 2px #0008;pointer-events:none}
+.fs .panel{width:min(780px,100%)}.fs .bar{position:static;margin:8px 0 0;border-radius:8px 8px 0 0}
+details.vers{font-size:12px;color:var(--mute);margin-top:4px}details.vers summary{cursor:pointer}
+details.vers button{margin:4px 6px 0 0}
+
+@media (max-width:900px){.shell,.shell.wide{grid-template-columns:1fr;grid-template-rows:auto;height:auto}nav,aside{border:0;border-bottom:1px solid var(--line)}.tx{grid-template-columns:1fr}}
+</style></head><body>
+<div class="shell" id="shell">
+  <header><b id="name">…</b><span id="queue"></span><span id="err"></span></header>
+  <nav id="nav"></nav>
+  <main id="main"><div id="view"></div><iframe id="editor" title="frame editor"></iframe></main>
+  <aside id="files"></aside>
+</div>
+<div id="layer"></div>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const url = p => '/job/' + String(p).split('/').map(encodeURIComponent).join('/');
+const post = async (u, body) => { try { const r = await fetch(u, { method: 'POST', body: JSON.stringify(body || {}) }); return await r.json(); } catch (e) { return { error: String(e) }; } };
+const get = async u => { try { const r = await fetch(u); return r.ok ? await r.json() : null; } catch (e) { return null; } };
+const TABS = ['moments', 'assets', 'frame'];
+const st = { tab: 'moments', M: null, info: null, files: null, open: null, filter: 'all', ver: -1, made: -1, draw: false, strokes: 0, clipFile: null, mf: 'all', size: 'S', playAll: false, loud: null, pt: null };
+try { st.tab = localStorage.getItem('aios.tab') || st.tab; } catch (e) {}
+if (!TABS.includes(st.tab)) st.tab = 'moments';
+try { const z = localStorage.getItem('aios.size'); if (z) st.size = z; } catch (e) {}
+
+// ───────────── data ─────────────
+async function loadMoments() { const m = await get('/moments'); if (m) st.M = m; }
+async function loadFiles() { const f = await get('/files'); if (f) st.files = f; }
+async function loadInfo() { const i = await get('/info'); if (i) st.info = i; }
+const moments = () => (st.M && st.M.moments) || [];
+const mById = id => moments().find(m => m.id === id);
+const newest = m => m && m.clips.length ? m.clips[m.clips.length - 1] : null;
+// the reel span a clip shows: as made (clips.json), else the moment ±pad
+const spanOf = (m, c) => (c && Array.isArray(c.span)) ? c.span : [Math.max(0, (m.t0 || 0) - st.M.pad), Math.min(st.M.dur || 1e9, (m.t1 || 0) + st.M.pad)];
+const momentAt = t => moments().find(m => !m.off && m.t0 !== null && t >= m.t0 && t < m.t1) || moments().filter(m => !m.off).slice(-1)[0];
+
+async function poll() {
+  const v = await get('/version');
+  if (v) {
+    $('queue').textContent = [v.queue, v.draft_busy ? 'draft: rendering' : ''].filter(Boolean).join(' · ');
+    if (v.version !== st.ver || v.made !== st.made) {
+      const first = st.ver < 0;
+      st.ver = v.version; st.made = v.made;
+      await Promise.all([loadMoments(), loadFiles(), first ? loadInfo() : null]);
+      render();
+    }
+  }
+  setTimeout(poll, 1000);
+}
+
+// ───────────── shell ─────────────
+function render() {
+  if (!st.M) return;
+  $('name').textContent = st.M.name;
+  $('err').textContent = st.M.error || '';
+  $('nav').innerHTML = TABS.map(t => `<button class="tab ${st.tab === t ? 'on' : ''}" data-tab="${t}">${t}</button>`).join('')
+    + `<div class="hint">New job, script, cleaning options and the final render: in Claude Code.<br><br>${moments().reduce((n, m) => n + m.notes.filter(x => x.status === 'new').length, 0)} new note(s)</div>`;
+  renderFiles();
+  const frame = st.tab === 'frame';
+  $('shell').classList.toggle('wide', frame);
+  $('main').classList.toggle('frame', frame);
+  $('view').style.display = frame ? 'none' : '';
+  $('editor').style.display = frame ? 'block' : 'none';
+  if (frame) { if (!$('editor').getAttribute('src')) $('editor').src = '/editor'; renderLayer(false); return; }
+  keepTyping(() => {
+    const w = $('wall');
+    if (st.tab === 'moments' && w && w.dataset.sig === wallSig()) {   // same cards: only their notes change
+      moments().forEach(m => { const el = document.querySelector(`[data-info="${m.id}"]`); if (el) el.innerHTML = cardInfo(m); });
+      if ($('wallopen')) $('wallopen').textContent = moments().filter(m => m.notes.some(openNote)).length + ' with open notes';
+    } else { st.loud = null; $('view').innerHTML = V[st.tab](); if (st.tab === 'moments') hookWall(); }
+    renderLayer(false);
+  });
+}
+// a repaint (a new clip, a reload) keeps what the user is typing, and the cursor in it
+function keepTyping(paint) {
+  const a = document.activeElement, id = a && a.tagName === 'INPUT' && a.type === 'text' ? a.id : null;
+  const was = id ? [a.value, a.selectionStart, a.selectionEnd] : null;
+  paint();
+  const b = id && $(id);
+  if (b) { b.value = was[0]; b.focus(); b.setSelectionRange(was[1], was[2]); }
+}
+function renderFiles() {
+  const f = st.files; if (!f) return;
+  const walk = (kids, depth) => kids.map(k => k.kids
+    ? `<details class="${depth ? '' : 'top'} ${k.name === '_ai' ? 'ai' : ''}" ${depth === 0 && k.name !== '_ai' ? 'open' : ''} data-path="${esc(k.path)}"><summary>${esc(k.name)}/</summary>${walk(k.kids, depth + 1)}</details>`
+    : `<a href="${url(k.path)}" target="_blank" title="${esc(k.path)}">${esc(k.name)}</a>`).join('');
+  const was = [...document.querySelectorAll('#files details')];
+  const open = new Set(was.filter(d => d.open).map(d => d.dataset.path)), scroll = $('files').scrollTop;
+  $('files').innerHTML = `<div class="hint" style="font-family:system-ui;margin-bottom:6px">jobs/${esc(f.name)}/ · a click opens the file in a new tab</div>${walk(f.kids, 0)}`;
+  if (was.length) document.querySelectorAll('#files details').forEach(d => { d.open = open.has(d.dataset.path); });
+  $('files').scrollTop = scroll;
+}
+
+// ───────────── tabs ─────────────
+const V = {};
+const noteCount = m => { const n = m.notes.filter(x => x.status === 'new').length; return n ? `<span class="badge" title="new notes">${n}</span> ` : ''; };
+const short = (s, n) => s.length > n ? s.slice(0, n) + '…' : s;
+const stillOf = m => m.still ? `<img src="${m.still}" alt="${m.id}" loading="lazy">` : `<div class="ph"><span class="big">${m.id}</span>${m.off ? 'off' : 'still: in the queue'}</div>`;
+function noteList(m) {
+  return `<ul class="notes">${m.notes.map(n => `<li class="s-${esc(n.status)}"><b>${esc(n.text)}</b> · ${esc(n.id)} ${esc(n.status || '')}${n.file ? ' · ' + esc(String(n.file).split('/').pop()) + (n.sec ? ' @ ' + esc(n.sec) + ' s' : '') : ''}${n.reply ? '<br>↳ ' + esc(n.reply) : ''}</li>`).join('') || '<li>no notes yet</li>'}</ul>`;
+}
+// extra: more buttons in the row; info: lines between the row and the words
+function noteBar(m, extra, info) {
+  return `<div class="bar"><div class="notebar"><span class="mid">${m.id}</span><input id="ni" placeholder="Note on ${m.id}… (Enter)" autocomplete="off"><button class="btn pri" data-act="add">Add</button>${extra || ''}<button class="btn" data-act="close" title="Esc">×</button></div>
+    ${info || ''}<div class="hint" style="margin-top:4px">${esc(short(m.words, 160))}</div>${noteList(m)}</div>`;
+}
+// the moments wall: every moment on one page, its clip in the card (hover: plays muted; click: sound; ⤢ or
+// double-click: full screen), its notes and a note box (user rule 2026-10-22: one view, scroll, no click-through)
+const SIZES = { S: 10, M: 6, L: 3 };
+const openNote = n => n.status === 'new' || n.status === 'ask';
+const wallMs = () => moments().filter(m => st.mf === 'open' ? m.notes.some(openNote) : st.mf === 'noclip' ? !newest(m) : true);
+const wallSig = () => [st.mf, st.size, ...wallMs().map(m => m.id + ':' + (newest(m) ? newest(m).file : m.still || '') + (m.off ? ':off' : ''))].join('|');
+const cardInfo = m => `<b class="mid">${m.id}</b> <span class="dim">${(m.t0 || 0).toFixed(1)} s</span><br>${esc(short(m.words, 44))}<div class="nds">${m.notes.map(n =>
+  `<span class="nd s-${esc(n.status || 'new')}" ${n.status === 'ask' ? `data-ask="${m.id} ${esc(n.id)}"` : ''} title="${esc(n.id + ' ' + (n.status || '') + ': ' + n.text + (n.reply ? '\n→ ' + n.reply : '') + (n.status === 'ask' ? '\nclick: answer it' : ''))}">${esc(n.id)}</span>`).join('')}</div>`;
+V.moments = () => {
+  const ms = moments();
+  if (!ms.length) return `<h2>Moments</h2><p class="lead">No moments yet. The agent writes the moment lines in edit.txt.</p>`;
+  const chips = [['all', 'all'], ['open', 'open notes'], ['noclip', 'no clip yet']].map(([k, l]) => `<span class="chip ${st.mf === k ? 'on' : ''}" data-mf="${k}">${l}</span>`).join('');
+  const sizes = Object.keys(SIZES).map(k => `<span class="chip ${st.size === k ? 'on' : ''}" data-size="${k}">${k}</span>`).join('');
+  return `<div class="wallbar"><b>Moments ${ms.length}</b><span class="dim" id="wallopen">${ms.filter(m => m.notes.some(openNote)).length} with open notes</span>${chips}<span class="grow"></span><button class="btn" data-act="playall" id="playall">${st.playAll ? '■ stop' : '▶ play all'}</button>${sizes}</div>
+  <div class="wall" id="wall" data-sig="${esc(wallSig())}" style="grid-template-columns:repeat(${SIZES[st.size] || 10},minmax(0,1fr))">${wallMs().map(m => { const c = newest(m);
+    return `<div class="mc ${m.off ? 'off' : ''}" id="c-${m.id}"><div class="mv" data-play="${m.id}">${c ? `<video src="${url(c.file)}" muted loop preload="metadata" playsinline></video>` : stillOf(m)}<button class="fsb" data-open="${m.id}" title="full screen (or double-click)">⤢</button></div>
+      <div class="cap" data-info="${m.id}">${cardInfo(m)}</div><input id="n-${m.id}" class="mn" data-note="${m.id}" placeholder="note on ${m.id}… ⏎" autocomplete="off"></div>`; }).join('')}</div>`;
+};
+const cardVideo = id => document.querySelector(`#c-${id} video`);
+function hookWall() {   // hover: the clip plays muted in a loop (not the one playing with sound)
+  document.querySelectorAll('.mv video').forEach(v => {
+    v.onmouseenter = () => { if (v !== st.loud) { v.muted = true; v.loop = true; v.play().catch(() => {}); } };
+    v.onmouseleave = () => { if (v !== st.loud) v.pause(); };
+  });
+}
+function loud(v) {   // one clip with sound at a time
+  if (st.loud && st.loud !== v) { st.loud.pause(); st.loud.muted = true; st.loud.closest('.mc').classList.remove('on'); }
+  st.loud = v; if (!v) return;
+  v.muted = false; v.loop = false; v.closest('.mc').classList.add('on'); v.play().catch(() => {});
+  v.onended = () => { v.closest('.mc').classList.remove('on'); if (st.loud === v) st.loud = null; if (st.playAll) playNext(v); };
+}
+function playNext(v) {   // ▶ play all: the next card with a clip, scrolled into view
+  const all = [...document.querySelectorAll('.mv video')], n = all[all.indexOf(v) + 1];
+  if (!n) { setPlayAll(false); return; }
+  n.closest('.mc').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); n.currentTime = 0; loud(n);
+}
+function setPlayAll(on) {
+  st.playAll = on; if ($('playall')) $('playall').textContent = on ? '■ stop' : '▶ play all';
+  if (on) { const f = document.querySelector('.mv video'); if (f) { f.currentTime = 0; loud(f); } } else if (st.loud) { st.loud.pause(); loud(null); }
+}
+function openFull(id) {
+  setPlayAll(false); document.querySelectorAll('.mv video').forEach(v => v.pause());
+  st.open = id; st.clipFile = null; renderLayer(true); if ($('ni')) $('ni').focus();
+}
+async function noteFromCard(id) {
+  const m = mById(id), inp = $('n-' + id); if (!m || !inp) return;
+  const c = newest(m), v = cardVideo(id);
+  const ok = c && v ? await addNote(m, inp.value, Math.min(spanOf(m, c)[0] + v.currentTime, (st.M.dur || 1e9) - 0.01), c.file, v.currentTime)
+    : await addNote(m, inp.value, ((m.t0 || 0) + (m.t1 || 0)) / 2, m.still ? decodeURIComponent(m.still.replace(/^\/job\//, '').split('?')[0]) : '', null);
+  if (ok && $('n-' + id)) $('n-' + id).value = '';
+}
+
+V.assets = () => {
+  const media = [];
+  const walk = kids => kids.forEach(k => k.kids ? walk(k.kids) : media.push(k));
+  const mdir = st.files && st.files.kids.find(k => k.name === 'media');
+  if (mdir) walk(mdir.kids);
+  const takes = new Set(((st.info && st.info.edit && st.info.edit.lines) || []).filter(l => l.kind === 'take').map(l => l.text));
+  const used = p => moments().filter(m => m.broll.some(b => b.file === p)).map(m => m.id);
+  const all = media.map(f => ({ ...f, kind: /^media\/refs\//.test(f.path) ? 'ref' : takes.has(f.path) || /take/i.test(f.name) ? 'take' : /\.(jpe?g|png|gif|webp|avif)$/i.test(f.name) ? 'image' : /\.(mp4|mov|webm|m4v)$/i.test(f.name) ? 'video' : 'other', used: used(f.path) }));
+  const missing = moments().flatMap(m => m.broll.filter(b => !b.ok).map(b => ({ m: m.id, file: b.file })));
+  const unused = a => !a.used.length && a.kind !== 'take' && a.kind !== 'ref';
+  const count = k => k === 'all' ? all.length : k === 'unused' ? all.filter(unused).length : k === 'missing' ? missing.length : all.filter(a => a.kind === k).length;
+  const show = st.filter === 'missing' ? [] : all.filter(a => st.filter === 'all' || (st.filter === 'unused' ? unused(a) : a.kind === st.filter));
+  const thumb = a => a.kind === 'image' || (a.kind === 'ref' && /\.(jpe?g|png|gif|webp)$/i.test(a.name)) ? `<img src="${url(a.path)}" alt="" loading="lazy">`
+    : /\.(mp4|mov|webm|m4v)$/i.test(a.name) ? `<video src="${url(a.path)}#t=0.5" preload="metadata" muted></video>` : `<div class="ph">${esc(a.name)}</div>`;
+  const mb = n => n > 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.round(n / 1e3) + ' KB';
+  return `<h2>Assets</h2><p class="lead">The files in media/ and the moments that use them. A click opens the file in a new tab.</p>
+  <div>${['all', 'take', 'video', 'image', 'ref', 'unused', 'missing'].map(k => `<span class="chip ${st.filter === k ? 'on' : ''}" data-filter="${k}">${k} ${count(k)}</span>`).join('')}</div>
+  <div class="grid">
+   ${st.filter === 'all' || st.filter === 'missing' ? missing.map(x => `<div class="card missing"><div class="ph">missing:<br>${esc(x.file)}</div><div class="cap miss">${x.m} needs it</div></div>`).join('') : ''}
+   ${show.map(a => `<a class="card" href="${url(a.path)}" target="_blank">${thumb(a)}<span class="kind">${a.kind}</span><div class="cap">${esc(a.name)}<br><span class="dim">${mb(a.size)} · </span>${a.used.length ? `<span class="okc">${a.used.join(', ')}</span>` : `<span class="dim">${a.kind === 'take' || a.kind === 'ref' ? a.kind : 'unused'}</span>`}</div></a>`).join('')}
+  </div>`;
+};
+
+V.frame = () => '';
+
+// ───────────── the clip pop-up (full screen; the only pop-up) ─────────────
+const playingFile = m => st.clipFile || (newest(m) && newest(m).file);
+function renderLayer(fresh) {
+  const L = $('layer');
+  if (st.tab !== 'moments' || !st.open) { L.innerHTML = ''; L.dataset.m = ''; st.draw = false; return; }
+  const m = mById(st.open); if (!m) { st.open = null; L.innerHTML = ''; return; }
+  const want = playingFile(m);
+  if (!fresh && $('vc') && L.dataset.m === m.id) {   // the clip plays on: only the notes and the versions change
+    keepTyping(() => { $('lpanel').innerHTML = layerPanel(m, want); });
+    return;
+  }
+  L.dataset.m = m.id;
+  L.innerHTML = `<div class="fs"><div class="vw">${want ? `<video id="vc" src="${url(want)}" controls autoplay playsinline></video>` : `<div class="ph" style="padding:40px"><span class="big">${m.id}</span>no clip yet: in the queue</div>`}<canvas id="dc" style="display:none"></canvas><div id="pd" style="display:none" title="click: the spot your note means"></div></div><div class="panel" id="lpanel">${layerPanel(m, want)}</div></div>`;
+  st.strokes = 0; st.draw = false;
+  hookDot();
+}
+function layerPanel(m, playing) {
+  const c = m.clips.find(x => x.file === playing), sp = spanOf(m, c), nw = newest(m);
+  const older = m.clips.filter(x => x.file !== playing).reverse();
+  const extra = playing ? `<button class="btn ${st.draw ? 'on' : ''}" data-act="draw" title="draw on the paused frame; the drawing goes with the note (Esc: stop)">✎ draw</button>` : '';
+  const info = `<div class="hint">${playing ? esc(playing) + ' · reel ' + sp[0].toFixed(2) + '–' + sp[1].toFixed(2) + ' s' : ''}${nw && playing !== nw.file ? ` · <button class="btn" data-ver="${esc(nw.file)}">a newer clip is ready: play it</button>` : ''}</div>`
+    + (older.length ? `<details class="vers"><summary>${older.length} other version${older.length > 1 ? 's' : ''}</summary>${older.map(x => `<button class="btn" data-ver="${esc(x.file)}">${esc(x.file.split('/').pop())}</button>`).join('')}</details>` : '');
+  return noteBar(m, extra, info);
+}
+function setDraw(on) {
+  const v = $('vc'), c = $('dc'); if (!v || !c) return;
+  st.draw = on;
+  if (on) {
+    v.pause();
+    if (c.style.display === 'none') { c.width = v.videoWidth || 540; c.height = v.videoHeight || 960; }
+    const r = v.getBoundingClientRect(), p = v.parentElement.getBoundingClientRect();
+    Object.assign(c.style, { display: 'block', left: (r.left - p.left) + 'px', top: (r.top - p.top) + 'px', width: r.width + 'px', height: r.height + 'px' });
+  } else if (!st.strokes) c.style.display = 'none';
+  else c.style.pointerEvents = 'none';
+  if (on) c.style.pointerEvents = 'auto';
+  placeDot();
+  keepTyping(() => { $('lpanel').innerHTML = layerPanel(mById(st.open), playingFile(mById(st.open))); });
+}
+function clearDraw() { const c = $('dc'); if (c) { c.getContext('2d').clearRect(0, 0, c.width, c.height); c.style.display = 'none'; } st.strokes = 0; st.draw = false; }
+
+// ───────────── the note point: the spot "this" means ─────────────
+// A click on the paused full-screen clip drops a dot; else the last spot the mouse rested on a clip (REST_MS), so
+// the quick move to the note box does not count. The note sends it as 0-1 of the picture (user pick, 2026-10-30).
+const REST_MS = 400, CONTROLS_PX = 56, DOT_HIT_PX = 16;   // CONTROLS_PX: the video's own control bar stays clickable; DOT_HIT_PX: a click this near the dot removes it
+let restTimer = null;
+function picPoint(v, e) {   // the pointer as 0-1 of the picture inside the video box (cards: object-fit cover)
+  const r = v.getBoundingClientRect(), vw = v.videoWidth || 9, vh = v.videoHeight || 16;
+  const s = (getComputedStyle(v).objectFit === 'cover' ? Math.max : Math.min)(r.width / vw, r.height / vh);
+  const w = vw * s, h = vh * s, x = (e.clientX - r.left - (r.width - w) / 2) / w, y = (e.clientY - r.top - (r.height - h) / 2) / h;
+  return x >= 0 && x <= 1 && y >= 0 && y <= 1 ? { x, y } : null;
+}
+document.addEventListener('pointermove', e => {
+  clearTimeout(restTimer);
+  const v = e.target.id === 'pd' ? $('vc') : e.target.closest && e.target.closest('video');   // pd: the paused clip
+  if (!v || (st.pt && st.pt.by === 'dot')) return;
+  const p = picPoint(v, e), m = v.id === 'vc' ? st.open : (v.closest('.mc') || { id: '' }).id.replace(/^c-/, '');
+  if (p && m) restTimer = setTimeout(() => { if (!st.pt || st.pt.by !== 'dot') st.pt = { ...p, by: 'rest', m }; }, REST_MS);
+});
+function placeDot() {   // the dot layer covers the paused clip, not its control bar, and hides while drawing
+  const v = $('vc'), d = $('pd'); if (!v || !d) return;
+  if (!v.paused || st.draw) { d.style.display = 'none'; return; }
+  const r = v.getBoundingClientRect(), p = v.parentElement.getBoundingClientRect();
+  Object.assign(d.style, { display: 'block', left: (r.left - p.left) + 'px', top: (r.top - p.top) + 'px', width: r.width + 'px', height: Math.max(0, r.height - CONTROLS_PX) + 'px' });
+}
+window.addEventListener('resize', placeDot);
+function clearDot() { if (st.pt && st.pt.by === 'dot') st.pt = null; if ($('pd')) $('pd').innerHTML = ''; }
+function hookDot() {
+  const v = $('vc'), d = $('pd'); if (!v || !d) return;
+  v.addEventListener('pause', placeDot);
+  v.addEventListener('loadedmetadata', placeDot);   // a clip that never played (autoplay blocked) has no size before this
+  v.addEventListener('play', () => { clearDot(); placeDot(); });
+  d.addEventListener('click', e => {
+    const p = picPoint(v, e); if (!p) return;
+    clearTimeout(restTimer);   // a rest timer from the move before the click would overwrite the dot
+    const r = d.getBoundingClientRect(), old = d.querySelector('.pdot');
+    if (old && Math.hypot(e.clientX - r.left - parseFloat(old.style.left), e.clientY - r.top - parseFloat(old.style.top)) < DOT_HIT_PX) {
+      clearDot(); return;   // a click on the dot removes it (user pick, 2026-10-30)
+    }
+    st.pt = { ...p, by: 'dot', m: st.open };
+    d.innerHTML = `<div class="pdot" style="left:${e.clientX - r.left}px;top:${e.clientY - r.top}px"></div>`;
+    if ($('ni')) $('ni').focus();
+  });
+  placeDot();
+}
+
+// ───────────── notes ─────────────
+async function addNote(m, text, t, file, sec) {
+  text = text.trim(); if (!text) return false;
+  const png = st.strokes && $('dc') ? $('dc').toDataURL('image/png') : null;
+  const pt = st.pt && st.pt.m === m.id ? st.pt : null;
+  if (pt) { st.pt = null; clearDot(); }   // the note takes its point at once: a new point can be made while it is in flight
+  const r = await post('/enote', { t, text, moment: m.id, file, sec, png, pt: pt ? [pt.x, pt.y] : null, ptby: pt ? pt.by : null });
+  if (r.error) { if (pt && !st.pt) st.pt = pt; alertBar(r.error); return false; }   // not saved: the point comes back
+  m.notes.push({ id: r.id, text, status: 'new', file, sec: sec !== null && sec !== undefined ? sec.toFixed(2) : null });
+  clearDraw();
+  if (st.tab === 'moments' && st.open) renderLayer(false); else render();
+  if ($('ni')) { $('ni').value = ''; $('ni').focus(); }
+  return true;
+}
+function alertBar(s) { $('err').textContent = s; setTimeout(() => { if ($('err').textContent === s) $('err').textContent = (st.M && st.M.error) || ''; }, 10000); }
+function noteFromBar() {
+  const m = mById(st.open), text = $('ni').value; if (!m) return;
+  if (!playingFile(m)) {   // no clip yet: the note is on the still
+    const f = m.still ? decodeURIComponent(m.still.replace(/^\/job\//, '').split('?')[0]) : '';
+    addNote(m, text, (m.t0 + m.t1) / 2, f, null);
+  } else {
+    const v = $('vc'), file = playingFile(m), sp = spanOf(m, m.clips.find(x => x.file === file));
+    const sec = v ? v.currentTime : 0;
+    addNote(m, text, Math.min(sp[0] + sec, (st.M.dur || 1e9) - 0.01), file || '', sec);
+  }
+}
+function setTab(t) { st.tab = t; st.open = null; st.clipFile = null; try { localStorage.setItem('aios.tab', t); } catch (e) {} render(); }
+document.addEventListener('click', async e => {
+  const t = e.target, d = k => t.closest(`[data-${k}]`);
+  if (d('tab')) setTab(d('tab').dataset.tab);
+  else if (d('filter')) { st.filter = d('filter').dataset.filter; render(); }
+  else if (d('ver')) { st.clipFile = d('ver').dataset.ver; renderLayer(true); }
+  else if (d('act')) {
+    const b = d('act'), a = b.dataset.act;
+    if (a === 'close') { st.open = null; st.clipFile = null; render(); }
+    else if (a === 'add') noteFromBar();
+    else if (a === 'draw') setDraw(!st.draw);
+    else if (a === 'playall') setPlayAll(!st.playAll);
+  }
+  else if (d('mf')) { st.mf = d('mf').dataset.mf; render(); }
+  else if (d('size')) { st.size = d('size').dataset.size; try { localStorage.setItem('aios.size', st.size); } catch (e) {} render(); }
+  else if (d('ask')) { const [id, n] = d('ask').dataset.ask.split(' '), inp = $('n-' + id); if (inp) { inp.value = `answer to ${n}: `; inp.focus(); } }
+  else if (d('open')) openFull(d('open').dataset.open);
+  else if (d('play')) { const v = cardVideo(d('play').dataset.play); if (v) { if (v === st.loud && !v.paused) { v.pause(); } else { if (st.playAll && v !== st.loud) setPlayAll(false); loud(v); } } }
+});
+document.addEventListener('dblclick', e => { const p = e.target.closest('[data-play]'); if (p) openFull(p.dataset.play); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.dataset && e.target.dataset.note) noteFromCard(e.target.dataset.note);
+  else if (e.key === 'Enter' && e.target.id === 'ni') noteFromBar();
+  else if (e.key === 'Escape' && st.draw) setDraw(false);
+  else if (e.key === 'Escape' && st.pt && st.pt.by === 'dot') clearDot();   // first Esc: the dot; the next one closes the clip
+  else if (e.key === 'Escape' && st.open) { st.open = null; st.clipFile = null; render(); }
+});
+// drawing on the paused clip frame (red ink; sent as a PNG with the note)
+let pen = null;
+document.addEventListener('pointerdown', e => {
+  if (e.target.id !== 'dc' || !st.draw) return;
+  const c = e.target, r = c.getBoundingClientRect();
+  pen = { c, kx: c.width / r.width, ky: c.height / r.height, r };
+  pen.last = [(e.clientX - r.left) * pen.kx, (e.clientY - r.top) * pen.ky];
+  st.strokes++; c.setPointerCapture(e.pointerId);
+});
+document.addEventListener('pointermove', e => {
+  if (!pen) return;
+  const g = pen.c.getContext('2d'), p = [(e.clientX - pen.r.left) * pen.kx, (e.clientY - pen.r.top) * pen.ky];
+  g.strokeStyle = '#ff3b30'; g.lineWidth = 6; g.lineCap = 'round'; g.beginPath(); g.moveTo(...pen.last); g.lineTo(...p); g.stroke(); pen.last = p;
+});
+document.addEventListener('pointerup', () => { pen = null; });
+poll();
+</script>
+</body></html>

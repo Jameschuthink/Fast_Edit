@@ -1,0 +1,3 @@
+# look scene_hero: card words, caption HERO (Aston Script), white, large; scene lines use it for ^HERO^ words
+font CapScript "../fonts/captions/aston_script/Aston Script.ttf"
+style scene_hero font=CapScript size=380 track=0 color=#ffffff enter=soft fit=880

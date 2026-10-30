@@ -1,0 +1,3 @@
+# look scene_emph: card words, caption emphasis (Garamond italic), white; scene lines use it for *EMPHASIS* words
+font CapGaramond "../fonts/captions/apple_garamond/AppleGaramond-Italic.ttf"
+style scene_emph font=CapGaramond size=170 track=-30 color=#ffffff enter=soft fit=900

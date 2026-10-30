@@ -1,0 +1,3 @@
+# look behind_head: one huge white script word behind the person (a test job "Biggest", "traction"); its middle near the top of the head, only the low strokes go behind the head; fades in 0.3 s; set y from the face box
+font Script "../fonts/captions/aston_script/Aston Script.ttf"
+style behind_head font=Script size=480 color=#ffffff in=0.3 grow=1 fit=1000 behind y=353

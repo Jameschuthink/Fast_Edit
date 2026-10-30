@@ -1,0 +1,42 @@
+engine/target/
+engine/vendor/*.tar.gz
+review/
+final/
+media
+.watch
+.venv
+*.mp4
+*.wav
+*.m4a
+.env
+*.bak
+__pycache__/
+models/*/weights/
+models/marlin/Marlin-2B/
+models/marlin/.cache/
+models/marlin/setup.log
+# a git clone (own .git), pinned in models/separation/AGENTS.md
+models/separation/mss/
+# copies of AIOS2 media and venvs (were symlinks until 2026-10-11): data, not source
+.syncvenv
+.claude/skills/reel/assets/
+# reference clone of github.com/dmtrKovalenko/fframes (architecture study, _archive/docs/archive/FFRAMES_ARCHITECTURE.md)
+engine/vendor/fframes/
+logs/
+
+# repowise owner-digest key (local)
+.repowise/events.key
+
+# repowise index (local, 53 MB of caches)
+.repowise/
+
+# okolors binary (colour picker): get it with the line in .claude/skills/poster/SKILL.md
+bin/okolors
+.claude/state/
+# made fresh by each dev chat (dev/README.md step 0), never committed
+dev/REPOWISE.md
+# creative jobs: on disk, never in git (R-no-job-commit, _shared/RULES.md); jobs/CONTEXT.md stays tracked
+jobs/*/
+
+# per-machine Claude Code settings (the Mac: disableAllHooks, README Setup)
+.claude/settings.local.json

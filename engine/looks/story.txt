@@ -1,0 +1,3 @@
+# look story: made in a test job for the note "storytelling remain the font same as captions. make it bigger with capital S, and the storytelling opacity 100. but the "
+font GaramondI "../fonts/captions/apple_garamond/AppleGaramond-Italic.ttf"
+style  story font=GaramondI size=440 color=#111111 in=0.12 grow=1.12 fit=1000 fade=0.6 behind

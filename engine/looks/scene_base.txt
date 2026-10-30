@@ -1,0 +1,3 @@
+# look scene_base: card words, caption sans (Inter Bold), white, centred on black; scene lines use it for BASE words
+font CapInter "../fonts/captions/Inter.ttf"
+style scene_base font=CapInter weight=700 size=200 track=-60 color=#ffffff enter=soft fit=900

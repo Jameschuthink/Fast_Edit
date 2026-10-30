@@ -1,0 +1,43 @@
+[package]
+name = "aios"
+version = "0.1.0"
+edition = "2024"
+description = "AIOS3 engine: JS Canvas2D compositions rendered by Skia on every core, video in and out through ffmpeg (NVDEC/NVENC)"
+publish = false
+
+[dependencies]
+# the feature set per OS matches a prebuilt Skia binary (rust-skia/skia-binaries 0.153.3), so Skia is never compiled
+skia-safe = { version = "=0.153.3", features = ["ganesh", "textlayout", "svg", "webp"] }
+rquickjs = { version = "0.14", features = ["loader", "array-buffer", "classes", "properties"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }   # beats.json keeps its key order when an edit rewrites it
+crossbeam-channel = "0.5"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+png = "0.18"
+tiny_http = "0.12"
+libc = "0.2"
+clap = { version = "4", features = ["derive", "env"] }   # env: --root falls back to AIOS_ROOT
+ureq = { version = "2", features = ["json"] }
+
+# GPU painting (gpu.rs, yuv.rs): Vulkan on Linux only
+[target.'cfg(target_os = "linux")'.dependencies]
+skia-safe = { version = "=0.153.3", features = ["vulkan"] }
+ash = "0.38"
+
+# macOS paints on the CPU; `metal` only picks the prebuilt binary (Metal painting = a later step)
+[target.'cfg(target_os = "macos")'.dependencies]
+skia-safe = { version = "=0.153.3", features = ["metal"] }
+
+[profile.release]
+opt-level = 3
+debug = false
+codegen-units = 16
+incremental = true
+panic = "unwind"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
